@@ -1,7 +1,8 @@
+
 'use server';
-import type { TV, Campaign, AdMedia } from './types';
+import type { TV, Campaign, AdMedia, User } from './types'; // Dodan User tip
 import { query, execute } from './db';
-import type { OkPacket } from 'mysql2';
+import type { OkPacket, RowDataPacket } from 'mysql2';
 
 // Helper za mapiranje snake_case u camelCase
 const mapToCamelCase = (row: any): any => {
@@ -28,7 +29,7 @@ export const getTVById = async (id: string): Promise<TV | undefined> => {
 };
 
 export const addTV = async (tvData: Omit<TV, 'id' | 'uniqueUrl'>): Promise<TV> => {
-  const newId = `tv${Date.now()}`; // Jednostavna generacija ID-a, može se poboljšati
+  const newId = `tv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const uniqueUrl = `/tv/${newId}`;
   const newTV: TV = { ...tvData, id: newId, uniqueUrl };
   await execute('INSERT INTO tvs (id, name, description, unique_url) VALUES (?, ?, ?, ?)', [
@@ -51,7 +52,6 @@ export const updateTV = async (updatedTV: TV): Promise<TV | undefined> => {
 };
 
 export const deleteTV = async (id: string): Promise<boolean> => {
-  // ON DELETE CASCADE u campaign_tvs će obrisati reference
   const result = await execute<OkPacket>('DELETE FROM tvs WHERE id = ?', [id]);
   return result.affectedRows > 0;
 };
@@ -77,9 +77,8 @@ const mapDbAdToAdType = (dbAd: any): AdMedia => {
         url: dbAd.url,
         fileName: dbAd.fileName,
         durationSeconds: dbAd.durationSeconds,
-        startTime: dbAd.startTime instanceof Date ? dbAd.startTime.toISOString() : dbAd.startTime,
-        endTime: dbAd.endTime instanceof Date ? dbAd.endTime.toISOString() : dbAd.endTime,
-        // dataAIHint se mapira iz data_ai_hint
+        startTime: dbAd.startTime instanceof Date ? dbAd.startTime.toISOString() : (dbAd.startTime || undefined),
+        endTime: dbAd.endTime instanceof Date ? dbAd.endTime.toISOString() : (dbAd.endTime || undefined),
         dataAIHint: dbAd.dataAiHint 
     };
 }
@@ -116,20 +115,20 @@ export const getCampaignById = async (id: string): Promise<Campaign | undefined>
 };
 
 export const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'ads' | 'assignedTvIds'>): Promise<Campaign> => {
-  const newId = `campaign${Date.now()}`;
+  const newId = `campaign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const newCampaign: Campaign = {
     ...campaignData,
     id: newId,
-    startTime: new Date(campaignData.startTime).toISOString(), // Osiguravamo ISO format
-    endTime: new Date(campaignData.endTime).toISOString(),   // Osiguravamo ISO format
+    startTime: new Date(campaignData.startTime).toISOString(),
+    endTime: new Date(campaignData.endTime).toISOString(),
     ads: [],
     assignedTvIds: [],
   };
   await execute('INSERT INTO campaigns (id, name, start_time, end_time) VALUES (?, ?, ?, ?)', [
     newCampaign.id,
     newCampaign.name,
-    newCampaign.startTime, // Već je ISO string
-    newCampaign.endTime,   // Već je ISO string
+    newCampaign.startTime,
+    newCampaign.endTime,
   ]);
   return newCampaign;
 };
@@ -145,23 +144,22 @@ export const updateCampaign = async (updatedCampaign: Pick<Campaign, 'id' | 'nam
     ]
   );
   if (result.affectedRows > 0) {
-    return getCampaignById(updatedCampaign.id); // Vraćamo puni objekt kampanje
+    return getCampaignById(updatedCampaign.id);
   }
   return undefined;
 };
 
 export const deleteCampaign = async (id: string): Promise<boolean> => {
-  // ON DELETE CASCADE u ads i campaign_tvs će obrisati povezane zapise
   const result = await execute<OkPacket>('DELETE FROM campaigns WHERE id = ?', [id]);
   return result.affectedRows > 0;
 };
 
-// Ad Media Management (within a campaign)
+// Ad Media Management
 export const addAdToCampaign = async (campaignId: string, adData: Omit<AdMedia, 'id'>): Promise<AdMedia | undefined> => {
   const campaign = await getCampaignById(campaignId);
   if (!campaign) return undefined;
 
-  const newAdId = `ad${Date.now()}`;
+  const newAdId = `ad-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const newAd: AdMedia = { 
     ...adData, 
     id: newAdId,
@@ -179,8 +177,8 @@ export const addAdToCampaign = async (campaignId: string, adData: Omit<AdMedia, 
       newAd.url,
       newAd.fileName,
       newAd.durationSeconds,
-      newAd.startTime,
-      newAd.endTime,
+      newAd.startTime, // Već ISO ili undefined
+      newAd.endTime,   // Već ISO ili undefined
       newAd.dataAIHint
     ]
   );
@@ -217,8 +215,8 @@ export const assignCampaignToTV = async (campaignId: string, tvId: string): Prom
     await execute('INSERT INTO campaign_tvs (campaign_id, tv_id) VALUES (?, ?)', [campaignId, tvId]);
     return true;
   } catch (error: any) {
-    if (error.code === 'ER_DUP_ENTRY') { // Ako veza već postoji
-      return true; // Smatramo uspješnim jer je ciljano stanje postignuto
+    if (error.code === 'ER_DUP_ENTRY') {
+      return true; 
     }
     console.error("Greška pri dodjeli kampanje TV-u:", error);
     return false;
@@ -241,33 +239,64 @@ export const hasConflict = async (tvId: string, newCampaign: Pick<Campaign, 'id'
     WHERE ct.tv_id = ? 
       AND c.id != ?
       AND (
-        (c.start_time <= ? AND c.end_time >= ?) OR -- Postojeća obuhvaća novu
-        (c.start_time >= ? AND c.start_time < ?) OR -- Nova počinje unutar postojeće
-        (c.end_time > ? AND c.end_time <= ?)     -- Nova završava unutar postojeće
+        (c.start_time <= ? AND c.end_time >= ?) OR 
+        (c.start_time >= ? AND c.start_time < ?) OR 
+        (c.end_time > ? AND c.end_time <= ?) OR
+        (c.start_time < ? AND c.end_time > ?) -- Nova kampanja je unutar postojeće
       )
     LIMIT 1;
   `;
-  // Parametri za upit: tvId, newCampaign.id, newEndTime, newStartTime, newStartTime, newEndTime, newStartTime, newEndTime
   const conflictingCampaigns = await query<any>(sql, [
     tvId,
     newCampaign.id,
-    newEndTime.toISOString(), newStartTime.toISOString(), // Za (StartA <= EndB) and (EndA >= StartB)
-    newStartTime.toISOString(), newEndTime.toISOString(),   // Za početak nove unutar postojeće
-    newStartTime.toISOString(), newEndTime.toISOString()    // Za kraj nove unutar postojeće
+    newEndTime.toISOString(), newStartTime.toISOString(), 
+    newStartTime.toISOString(), newEndTime.toISOString(),  
+    newStartTime.toISOString(), newEndTime.toISOString(),
+    newStartTime.toISOString(), newEndTime.toISOString() 
   ]);
 
   if (conflictingCampaigns.length > 0) {
-    // Dohvati puni objekt kampanje koja se sukobljava za prikaz
     const conflictData = mapToCamelCase(conflictingCampaigns[0]);
-    // Vraćamo samo osnovne podatke jer ne trebamo oglase i TV-e za poruku o sukobu
     return {
         id: conflictData.id,
         name: conflictData.name,
-        startTime: conflictData.startTime, // Ovo bi već trebao biti ISO string iz mapToCamelCase
-        endTime: conflictData.endTime,     // Ovo bi već trebao biti ISO string
-        ads: [], // Nije potrebno za poruku o sukobu
-        assignedTvIds: [] // Nije potrebno za poruku o sukobu
+        startTime: conflictData.startTime, 
+        endTime: conflictData.endTime,     
+        ads: [], 
+        assignedTvIds: [] 
     } as Campaign;
   }
   return null;
 };
+
+// User Management Functions
+interface UserWithPassword extends User {
+  passwordHash: string;
+}
+
+export async function getUserByUsernameWithPassword(username: string): Promise<UserWithPassword | null> {
+  const rows = await query<RowDataPacket[]>("SELECT id, username, password_hash, role FROM users WHERE username = ?", [username]);
+  if (rows.length === 0) {
+    return null;
+  }
+  const userRow = rows[0] as any;
+  return {
+    id: userRow.id,
+    username: userRow.username,
+    passwordHash: userRow.password_hash,
+    role: userRow.role,
+  } as UserWithPassword;
+}
+
+export async function getUserById(userId: string): Promise<User | null> {
+  const rows = await query<RowDataPacket[]>("SELECT id, username, role FROM users WHERE id = ?", [userId]);
+  if (rows.length === 0) {
+    return null;
+  }
+   const userRow = rows[0] as any;
+  return {
+    id: userRow.id,
+    username: userRow.username,
+    role: userRow.role,
+  } as User;
+}

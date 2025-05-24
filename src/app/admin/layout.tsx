@@ -1,7 +1,8 @@
+
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -12,10 +13,12 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarTrigger,
+  SidebarFooter, // Dodano
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Home, Tv, Clapperboard, Settings, ChevronRight } from 'lucide-react';
+import { Home, Tv, Clapperboard, Settings, ChevronRight, LogOut } from 'lucide-react'; // Dodan LogOut
 import type React from 'react';
+import { useToast } from '@/hooks/use-toast'; // Dodano
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Nadzorna ploča', icon: Home },
@@ -26,6 +29,23 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter(); // Dodano
+  const { toast } = useToast(); // Dodano
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (response.ok) {
+        toast({ title: 'Odjava uspješna!' });
+        router.push('/login');
+        router.refresh(); // Osigurava da se stanje na klijentu osvježi
+      } else {
+        toast({ title: 'Greška pri odjavi', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Greška pri odjavi', description: 'Pokušajte ponovo.', variant: 'destructive' });
+    }
+  };
 
   return (
     <SidebarProvider defaultOpen>
@@ -61,11 +81,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             ))}
           </SidebarMenu>
         </SidebarContent>
+         <SidebarFooter className="p-2 border-t border-sidebar-border">
+            <SidebarMenu>
+                <SidebarMenuItem>
+                    <SidebarMenuButton onClick={handleLogout} tooltip={{children: "Odjava", side: "right", align: "center"}}>
+                        <LogOut />
+                        <span>Odjava</span>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            </SidebarMenu>
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-4">
           <SidebarTrigger className="md:hidden" />
-          {/* Breadcrumbs or other header content can go here */}
         </header>
         <main className="flex-1 p-6 overflow-auto">
           {children}

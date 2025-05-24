@@ -1,19 +1,21 @@
+
 export interface AdMedia {
   id: string;
   name: string;
   type: 'image' | 'gif' | 'video';
-  url: string; // placeholder URL or actual URL from blob storage
+  url: string; 
   fileName: string;
-  durationSeconds?: number; // For images/GIFs. Video duration is inherent.
-  startTime?: string; // ISO date string, specific to this ad within the campaign
-  endTime?: string; // ISO date string, specific to this ad within the campaign
+  durationSeconds?: number; 
+  startTime?: string; 
+  endTime?: string; 
+  dataAIHint?: string;
 }
 
 export interface Campaign {
   id: string;
   name: string;
-  startTime: string; // ISO date string for the whole campaign
-  endTime: string; // ISO date string for the whole campaign
+  startTime: string; 
+  endTime: string; 
   ads: AdMedia[];
   assignedTvIds: string[];
 }
@@ -22,7 +24,13 @@ export interface TV {
   id: string;
   name: string;
   description?: string;
-  uniqueUrl?: string; // e.g., /tv/tv-lobby-1
+  uniqueUrl?: string; 
+}
+
+export interface User {
+  id: string;
+  username: string;
+  role: 'admin' | 'user';
 }
 
 // Utility type for form data
