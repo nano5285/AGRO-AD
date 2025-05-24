@@ -142,9 +142,9 @@ export default function CampaignDetailPage() {
     // Determine placeholder or existing URL
     let adUrl = data.url; // Use existing URL if available (e.g., editing an ad not changing file)
     if (data.file instanceof File) { // If a new file is selected, use placeholder
-      adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png?text=${encodeURIComponent(fileName)}`;
+      adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png`;
     } else if (!adUrl) { // Fallback if no file and no existing URL
-      adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png?text=${encodeURIComponent(fileName)}`;
+      adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png`;
     }
     
     const newAdData: Omit<AdMedia, 'id'> = {
@@ -155,7 +155,7 @@ export default function CampaignDetailPage() {
       durationSeconds: data.durationSeconds,
       startTime: data.startTime && data.startTime !== '' ? new Date(data.startTime).toISOString() : undefined,
       endTime: data.endTime && data.endTime !== '' ? new Date(data.endTime).toISOString() : undefined,
-      dataAIHint: data.dataAIHint,
+      dataAIHint: data.file instanceof File ? data.name.substring(0,50) : data.dataAIHint, // Use name for new file AI hint
     };
 
     try {
@@ -319,9 +319,6 @@ export default function CampaignDetailPage() {
             </form>
 
             {/* Assign TVs Form */}
-            {/* Important: This form needs to submit form.getValues("assignedTvIds") for onAssignTVs */}
-            {/* One way is to make onAssignTVs accept CampaignEditPageFormData and pick assignedTvIds from it */}
-            {/* Or, pass only the relevant part: form.handleSubmit(() => onAssignTVs({ assignedTvIds: form.getValues("assignedTvIds") })) */}
              <form onSubmit={form.handleSubmit(() => onAssignTVs({ assignedTvIds: form.getValues("assignedTvIds") || [] }))}>
               <Card>
                 <CardHeader>
@@ -332,14 +329,14 @@ export default function CampaignDetailPage() {
                   <FormField
                     control={form.control}
                     name="assignedTvIds"
-                    render={() => ( // Outer render is fine, inner one handles individual checkboxes
+                    render={() => ( 
                       <FormItem>
                         <ScrollArea className="h-48">
                         {allTVs.map((tv) => (
                           <FormField
                             key={tv.id}
                             control={form.control}
-                            name="assignedTvIds" // This should target the array for Checkbox changes
+                            name="assignedTvIds" 
                             render={({ field }) => {
                               return (
                                 <FormItem
@@ -370,7 +367,7 @@ export default function CampaignDetailPage() {
                           />
                         ))}
                         </ScrollArea>
-                        <FormMessage /> {/* For assignedTvIds array errors */}
+                        <FormMessage /> 
                       </FormItem>
                     )}
                   />
@@ -462,6 +459,8 @@ interface AdCreatorProps {
 
 function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }: AdCreatorProps) {
   const [isSubmittingAd, setIsSubmittingAd] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+
   const adForm = useForm<AdMediaFormData>({
     resolver: zodResolver(adMediaSchema),
     defaultValues: {
@@ -476,7 +475,6 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
 
   const onSubmitAd = async (data: AdMediaFormData) => {
     setIsSubmittingAd(true);
-    // Set default start/end times only if they are empty strings (or undefined)
     const finalStartTime = (data.startTime === '' || data.startTime === undefined) 
         ? format(parseISO(campaignStartTime), "yyyy-MM-dd'T'HH:mm") 
         : data.startTime;
@@ -492,6 +490,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
             name: '', type: 'image', file: undefined, durationSeconds: 10, 
             startTime: '', endTime: '' 
         });
+        setSelectedFileName(null);
     } catch (error) {
         console.error("Greška pri slanju forme za oglas:", error);
     } finally {
@@ -523,12 +522,41 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
             </Select><FormMessage />
           </FormItem>
         )} />
-        <FormField control={adForm.control} name="file" render={({ field: { onChange, value, ...rest } }) => ( // Destructure onChange to customize
-            <FormItem><FormLabel>Medijska datoteka</FormLabel>
-            <FormControl><Input type="file" {...rest} onChange={e => onChange(e.target.files?.[0])} /></FormControl>
-            <FormMessage />
+
+        <FormField
+          control={adForm.control}
+          name="file"
+          render={({ field: { onChange, value, name, ref, ...rest } }) => (
+            <FormItem>
+              <FormLabel>Medijska datoteka</FormLabel>
+              <FormControl>
+                <>
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      onChange(file);
+                      setSelectedFileName(file ? file.name : null);
+                    }}
+                    ref={ref}
+                    {...rest}
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="flex items-center justify-center w-full px-4 py-2 border border-input rounded-md shadow-sm text-sm font-medium text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                  >
+                    <UploadCloud className="mr-2 h-5 w-5" />
+                    {selectedFileName || "Odaberi medijsku datoteku"}
+                  </label>
+                </>
+              </FormControl>
+              <FormMessage />
             </FormItem>
-        )} />
+          )}
+        />
+        
         {(adType === 'image' || adType === 'gif') && (
           <FormField control={adForm.control} name="durationSeconds" render={({ field }) => (
             <FormItem><FormLabel>Trajanje prikaza (sekunde)</FormLabel>
