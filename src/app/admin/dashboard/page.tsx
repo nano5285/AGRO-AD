@@ -44,7 +44,7 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <>
-        <PageHeader title="Nadzorna ploča" description="Dobrodošli u AdVantage. Upravljajte svojim digitalnim natpisima bez napora." />
+        <PageHeader title="Nadzorna ploča" description="Dobrodošli u AGRO-AD. Upravljajte svojim digitalnim natpisima bez napora." />
         <div className="text-center py-10">Učitavanje podataka nadzorne ploče...</div>
       </>
     );
@@ -53,7 +53,7 @@ export default function DashboardPage() {
   if (error) {
     return (
        <>
-        <PageHeader title="Nadzorna ploča" description="Dobrodošli u AdVantage." />
+        <PageHeader title="Nadzorna ploča" description="Dobrodošli u AGRO-AD." />
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="flex items-center text-destructive">
@@ -75,7 +75,7 @@ export default function DashboardPage() {
     <>
       <PageHeader 
         title="Nadzorna ploča" 
-        description="Dobrodošli u AdVantage. Upravljajte svojim digitalnim natpisima bez napora."
+        description="Dobrodošli u AGRO-AD. Upravljajte svojim digitalnim natpisima bez napora."
         actions={
            <Button onClick={loadDashboardData} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" /> Osvježi podatke

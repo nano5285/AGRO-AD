@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'AdVantage - Upravljanje oglasima',
+  title: 'AGRO-AD - Upravljanje oglasima',
   description: 'Sustav za upravljanje digitalnim oglasima',
 };
 
