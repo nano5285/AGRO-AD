@@ -21,8 +21,12 @@ export async function POST(req: NextRequest) {
     const { username, password } = parsed.data;
     const user = await getUserByUsernameWithPassword(username);
 
-    if (!user) {
-      return NextResponse.json({ message: 'Korisnik nije pronađen.' }, { status: 401 });
+    // Poboljšana provjera korisnika i njegove hashirane lozinke
+    if (!user || !user.passwordHash || typeof user.passwordHash !== 'string' || user.passwordHash.trim() === '') {
+      if (user && (!user.passwordHash || typeof user.passwordHash !== 'string' || user.passwordHash.trim() === '')) {
+          console.error(`Pokušaj prijave za korisnika ${username}: Korisnik pronađen, ali hash lozinke je neispravan ili prazan.`);
+      }
+      return NextResponse.json({ message: 'Korisnik nije pronađen ili podaci nisu ispravni.' }, { status: 401 });
     }
 
     const passwordsMatch = await comparePasswords(password, user.passwordHash);
@@ -35,7 +39,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: 'Prijava uspješna!' }, { status: 200 });
   } catch (error) {
-    console.error('Greška pri prijavi:', error);
+    console.error('Greška pri prijavi:', error); // Ova linija logira stvarnu grešku na serveru
     return NextResponse.json({ message: 'Interna greška servera.' }, { status: 500 });
   }
 }
+
