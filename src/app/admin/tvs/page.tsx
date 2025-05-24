@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Search, ExternalLink, Trash2, Edit3 } from 'lucide-react';
+import { PlusCircle, Search, ExternalLink, Trash2, Edit3, RefreshCw } from 'lucide-react';
 import type { TV } from '@/lib/types';
 import { getTVs as fetchTVs, deleteTV as removeTV } from '@/lib/data';
 import {
@@ -27,24 +27,47 @@ import { Badge } from '@/components/ui/badge';
 export default function TVsPage() {
   const [tvs, setTVs] = useState<TV[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const loadTVs = async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchTVs();
+      setTVs(data);
+    } catch (error) {
+      console.error("Greška pri dohvaćanju TV prijemnika:", error);
+      toast({ title: "Greška pri dohvaćanju TV prijemnika", description: "Pokušajte ponovno kasnije.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setTVs(fetchTVs());
+    loadTVs();
   }, []);
 
-  const handleDeleteTV = (tvId: string) => {
-    const success = removeTV(tvId);
-    if (success) {
-      setTVs(fetchTVs()); // Refresh list
-      toast({
-        title: "TV obrisan",
-        description: `TV s ID-om ${tvId} uspješno je obrisan.`,
-      });
-    } else {
-      toast({
-        title: "Greška",
-        description: "Brisanje TV-a nije uspjelo.",
+  const handleDeleteTV = async (tvId: string) => {
+    try {
+      const success = await removeTV(tvId);
+      if (success) {
+        await loadTVs(); // Refresh list
+        toast({
+          title: "TV obrisan",
+          description: `TV s ID-om ${tvId} uspješno je obrisan.`,
+        });
+      } else {
+        toast({
+          title: "Greška",
+          description: "Brisanje TV-a nije uspjelo. Možda TV ne postoji.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+       console.error("Greška pri brisanju TV-a:", error);
+       toast({
+        title: "Greška pri brisanju",
+        description: "Dogodila se neočekivana pogreška.",
         variant: "destructive",
       });
     }
@@ -54,6 +77,21 @@ export default function TVsPage() {
     tv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (tv.description && tv.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader
+          title="Upravljanje TV prijemnicima"
+          description="Pregledajte, dodajte ili upravljajte svojim zaslonskim jedinicama."
+           actions={
+          <Button disabled><PlusCircle className="mr-2 h-4 w-4" /> Dodaj novi TV</Button>
+        }
+        />
+        <div className="text-center py-10">Učitavanje TV prijemnika...</div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -61,9 +99,14 @@ export default function TVsPage() {
         title="Upravljanje TV prijemnicima"
         description="Pregledajte, dodajte ili upravljajte svojim zaslonskim jedinicama."
         actions={
-          <Button asChild>
-            <Link href="/admin/tvs/new"><PlusCircle className="mr-2 h-4 w-4" /> Dodaj novi TV</Link>
-          </Button>
+          <>
+            <Button variant="outline" onClick={loadTVs} className="mr-2">
+              <RefreshCw className="mr-2 h-4 w-4" /> Osvježi
+            </Button>
+            <Button asChild>
+              <Link href="/admin/tvs/new"><PlusCircle className="mr-2 h-4 w-4" /> Dodaj novi TV</Link>
+            </Button>
+          </>
         }
       />
 

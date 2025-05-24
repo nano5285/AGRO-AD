@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Search, Edit, Trash2, CalendarDays, Tv } from 'lucide-react';
-import type { Campaign } from '@/lib/types';
-import { getCampaigns as fetchCampaigns, deleteCampaign as removeCampaign, getTVs } from '@/lib/data';
-import { format } from 'date-fns';
+import { PlusCircle, Search, Edit, Trash2, CalendarDays, Tv, RefreshCw } from 'lucide-react';
+import type { Campaign, TV as UITV } from '@/lib/types'; // Preimenujemo TV iz types da se ne sukobljava s ikonom
+import { getCampaigns as fetchCampaigns, deleteCampaign as removeCampaign, getTVs as fetchAllTVs } from '@/lib/data';
+import { format, parseISO } from 'date-fns';
 import { hr } from 'date-fns/locale';
 import {
   AlertDialog,
@@ -27,26 +27,53 @@ import { Badge } from '@/components/ui/badge';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [allTVs, setAllTVs] = useState<UITV[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const allTVs = getTVs();
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [campaignData, tvData] = await Promise.all([
+        fetchCampaigns(),
+        fetchAllTVs()
+      ]);
+      setCampaigns(campaignData);
+      setAllTVs(tvData);
+    } catch (error) {
+      console.error("Greška pri dohvaćanju podataka:", error);
+      toast({ title: "Greška pri dohvaćanju podataka", description: "Pokušajte ponovno kasnije.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    setCampaigns(fetchCampaigns());
-  }, []);
+    loadData();
+  }, [loadData]);
 
-  const handleDeleteCampaign = (campaignId: string) => {
-    const success = removeCampaign(campaignId);
-    if (success) {
-      setCampaigns(fetchCampaigns()); // Refresh list
-      toast({
-        title: "Kampanja obrisana",
-        description: `Kampanja s ID-om ${campaignId} uspješno je obrisana.`,
-      });
-    } else {
-      toast({
-        title: "Greška",
-        description: "Brisanje kampanje nije uspjelo.",
+  const handleDeleteCampaign = async (campaignId: string) => {
+    try {
+      const success = await removeCampaign(campaignId);
+      if (success) {
+        await loadData(); // Refresh list
+        toast({
+          title: "Kampanja obrisana",
+          description: `Kampanja s ID-om ${campaignId} uspješno je obrisana.`,
+        });
+      } else {
+        toast({
+          title: "Greška",
+          description: "Brisanje kampanje nije uspjelo. Možda kampanja ne postoji.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+       console.error("Greška pri brisanju kampanje:", error);
+       toast({
+        title: "Greška pri brisanju",
+        description: "Dogodila se neočekivana pogreška.",
         variant: "destructive",
       });
     }
@@ -58,14 +85,26 @@ export default function CampaignsPage() {
 
   const getCampaignStatus = (campaign: Campaign): { text: string; variant: "default" | "secondary" | "destructive" | "outline" } => {
     const now = new Date();
-    const startTime = new Date(campaign.startTime);
-    const endTime = new Date(campaign.endTime);
+    const startTime = parseISO(campaign.startTime);
+    const endTime = parseISO(campaign.endTime);
 
     if (now < startTime) return { text: 'Zakazana', variant: 'outline' };
     if (now > endTime) return { text: 'Istekla', variant: 'secondary' };
     return { text: 'Aktivna', variant: 'default' };
   };
-
+  
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader
+          title="Upravljanje kampanjama"
+          description="Stvarajte, uređujte i zakazujte svoje oglasne kampanje."
+          actions={<Button disabled><PlusCircle className="mr-2 h-4 w-4" /> Stvori novu kampanju</Button>}
+        />
+        <div className="text-center py-10">Učitavanje kampanja...</div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -73,9 +112,14 @@ export default function CampaignsPage() {
         title="Upravljanje kampanjama"
         description="Stvarajte, uređujte i zakazujte svoje oglasne kampanje."
         actions={
-          <Button asChild>
-            <Link href="/admin/campaigns/new"><PlusCircle className="mr-2 h-4 w-4" /> Stvori novu kampanju</Link>
-          </Button>
+           <>
+            <Button variant="outline" onClick={loadData} className="mr-2">
+              <RefreshCw className="mr-2 h-4 w-4" /> Osvježi
+            </Button>
+            <Button asChild>
+              <Link href="/admin/campaigns/new"><PlusCircle className="mr-2 h-4 w-4" /> Stvori novu kampanju</Link>
+            </Button>
+          </>
         }
       />
 
@@ -125,7 +169,7 @@ export default function CampaignsPage() {
                   </div>
                   <CardDescription className="flex items-center text-xs text-muted-foreground">
                     <CalendarDays className="h-3 w-3 mr-1" />
-                    {format(new Date(campaign.startTime), 'PPp', { locale: hr })} - {format(new Date(campaign.endTime), 'PPp', { locale: hr })}
+                    {format(parseISO(campaign.startTime), 'PPp', { locale: hr })} - {format(parseISO(campaign.endTime), 'PPp', { locale: hr })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow space-y-2">

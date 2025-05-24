@@ -1,13 +1,39 @@
+'use client'; // Potrebno zbog useEffect i useState
+
+import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Tv, Clapperboard, PlusCircle } from 'lucide-react';
+import { Tv, Clapperboard, PlusCircle, AlertTriangle, RefreshCw } from 'lucide-react'; // Dodane ikone
 import { getTVs, getCampaigns } from '@/lib/data';
+import type { TV as UITVType, Campaign as CampaignType } from '@/lib/types'; // Preimenovanje da se izbjegne sukob
 
 export default function DashboardPage() {
-  const tvs = getTVs();
-  const campaigns = getCampaigns();
+  const [tvs, setTvs] = useState<UITVType[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDashboardData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [tvData, campaignData] = await Promise.all([getTVs(), getCampaigns()]);
+      setTvs(tvData);
+      setCampaigns(campaignData);
+    } catch (err) {
+      console.error("Greška pri dohvaćanju podataka za nadzornu ploču:", err);
+      setError("Nije moguće učitati podatke. Pokušajte ponovno kasnije.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
   const activeCampaigns = campaigns.filter(c => {
     const now = new Date();
     const start = new Date(c.startTime);
@@ -15,9 +41,47 @@ export default function DashboardPage() {
     return start <= now && now <= end;
   });
 
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader title="Nadzorna ploča" description="Dobrodošli u AdVantage. Upravljajte svojim digitalnim natpisima bez napora." />
+        <div className="text-center py-10">Učitavanje podataka nadzorne ploče...</div>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+       <>
+        <PageHeader title="Nadzorna ploča" description="Dobrodošli u AdVantage." />
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center text-destructive">
+              <AlertTriangle className="mr-2 h-5 w-5" /> Greška pri učitavanju
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{error}</p>
+            <Button onClick={loadDashboardData} className="mt-4">
+              <RefreshCw className="mr-2 h-4 w-4" /> Pokušaj ponovno
+            </Button>
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
+
   return (
     <>
-      <PageHeader title="Nadzorna ploča" description="Dobrodošli u AdVantage. Upravljajte svojim digitalnim natpisima bez napora." />
+      <PageHeader 
+        title="Nadzorna ploča" 
+        description="Dobrodošli u AdVantage. Upravljajte svojim digitalnim natpisima bez napora."
+        actions={
+           <Button onClick={loadDashboardData} variant="outline">
+              <RefreshCw className="mr-2 h-4 w-4" /> Osvježi podatke
+            </Button>
+        }
+      />
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>

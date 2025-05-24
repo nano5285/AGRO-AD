@@ -1,170 +1,273 @@
+'use server';
 import type { TV, Campaign, AdMedia } from './types';
+import { query, execute } from './db';
+import type { OkPacket } from 'mysql2';
 
-let tvs: TV[] = [
-  { id: 'tv1', name: 'Lobby TV', description: 'Main television in the lobby area.', uniqueUrl: '/tv/tv1' },
-  { id: 'tv2', name: 'Reception Screen', description: 'Screen at the reception desk.', uniqueUrl: '/tv/tv2' },
-  { id: 'tv3', name: 'Cafeteria Display', description: 'Display in the main cafeteria.', uniqueUrl: '/tv/tv3' },
-];
-
-let campaigns: Campaign[] = [
-  {
-    id: 'campaign1',
-    name: 'Summer Sale 2024',
-    startTime: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // Active for the past week
-    endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),   // Active for the next week
-    ads: [
-      { id: 'ad1-1', name: 'Summer Discount Poster', type: 'image', url: 'https://placehold.co/1920x1080.png', fileName: 'summer_poster.png', durationSeconds: 10, dataAIHint: 'summer sale' },
-      { id: 'ad1-2', name: 'Beach Getaway Video', type: 'video', url: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4', fileName: 'beach_video.mp4', dataAIHint: 'beach vacation' },
-      { id: 'ad1-3', name: 'Ice Cream GIF', type: 'gif', url: 'https://placehold.co/1920x1080.gif', fileName: 'ice_cream.gif', durationSeconds: 5, dataAIHint: 'ice cream' },
-    ],
-    assignedTvIds: ['tv1', 'tv2'],
-  },
-  {
-    id: 'campaign2',
-    name: 'New Product Launch',
-    startTime: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(), // Starts tomorrow
-    endTime: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),  // Ends in two weeks
-    ads: [
-      { id: 'ad2-1', name: 'Product Teaser', type: 'image', url: 'https://placehold.co/1920x1080.png', fileName: 'product_teaser.png', durationSeconds: 15, dataAIHint: 'product launch' },
-    ],
-    assignedTvIds: ['tv3'],
-  },
-];
+// Helper za mapiranje snake_case u camelCase
+const mapToCamelCase = (row: any): any => {
+  const newRow: any = {};
+  for (const key in row) {
+    const camelKey = key.replace(/([-_][a-z])/gi, ($1) =>
+      $1.toUpperCase().replace('-', '').replace('_', '')
+    );
+    newRow[camelKey] = row[key] instanceof Date ? row[key].toISOString() : row[key];
+  }
+  return newRow;
+};
 
 // TV Management Functions
-export const getTVs = (): TV[] => [...tvs];
-export const getTVById = (id: string): TV | undefined => tvs.find(tv => tv.id === id);
-export const addTV = (tv: Omit<TV, 'id' | 'uniqueUrl'>): TV => {
-  const newId = `tv${tvs.length + 1}_${Date.now()}`;
-  const newTV: TV = { ...tv, id: newId, uniqueUrl: `/tv/${newId}` };
-  tvs = [...tvs, newTV];
+export const getTVs = async (): Promise<TV[]> => {
+  const rows = await query<any>('SELECT id, name, description, unique_url FROM tvs');
+  return rows.map(mapToCamelCase) as TV[];
+};
+
+export const getTVById = async (id: string): Promise<TV | undefined> => {
+  const rows = await query<any>('SELECT id, name, description, unique_url FROM tvs WHERE id = ?', [id]);
+  if (rows.length === 0) return undefined;
+  return mapToCamelCase(rows[0]) as TV;
+};
+
+export const addTV = async (tvData: Omit<TV, 'id' | 'uniqueUrl'>): Promise<TV> => {
+  const newId = `tv${Date.now()}`; // Jednostavna generacija ID-a, može se poboljšati
+  const uniqueUrl = `/tv/${newId}`;
+  const newTV: TV = { ...tvData, id: newId, uniqueUrl };
+  await execute('INSERT INTO tvs (id, name, description, unique_url) VALUES (?, ?, ?, ?)', [
+    newTV.id,
+    newTV.name,
+    newTV.description,
+    newTV.uniqueUrl,
+  ]);
   return newTV;
 };
-export const updateTV = (updatedTV: TV): TV | undefined => {
-  const index = tvs.findIndex(tv => tv.id === updatedTV.id);
-  if (index !== -1) {
-    tvs[index] = updatedTV;
-    return tvs[index];
-  }
-  return undefined;
+
+export const updateTV = async (updatedTV: TV): Promise<TV | undefined> => {
+  const result = await execute<OkPacket>('UPDATE tvs SET name = ?, description = ?, unique_url = ? WHERE id = ?', [
+    updatedTV.name,
+    updatedTV.description,
+    updatedTV.uniqueUrl,
+    updatedTV.id,
+  ]);
+  return result.affectedRows > 0 ? updatedTV : undefined;
 };
-export const deleteTV = (id: string): boolean => {
-  const initialLength = tvs.length;
-  tvs = tvs.filter(tv => tv.id !== id);
-  campaigns = campaigns.map(c => ({
-    ...c,
-    assignedTvIds: c.assignedTvIds.filter(tvId => tvId !== id)
-  }));
-  return tvs.length < initialLength;
+
+export const deleteTV = async (id: string): Promise<boolean> => {
+  // ON DELETE CASCADE u campaign_tvs će obrisati reference
+  const result = await execute<OkPacket>('DELETE FROM tvs WHERE id = ?', [id]);
+  return result.affectedRows > 0;
 };
 
 
 // Campaign Management Functions
-export const getCampaigns = (): Campaign[] => [...campaigns];
-export const getCampaignById = (id: string): Campaign | undefined => campaigns.find(c => c.id === id);
+const mapDbCampaignToCampaignType = (dbCampaign: any, ads: AdMedia[], assignedTvIds: string[]): Campaign => {
+  return {
+    id: dbCampaign.id,
+    name: dbCampaign.name,
+    startTime: dbCampaign.startTime instanceof Date ? dbCampaign.startTime.toISOString() : dbCampaign.startTime,
+    endTime: dbCampaign.endTime instanceof Date ? dbCampaign.endTime.toISOString() : dbCampaign.endTime,
+    ads,
+    assignedTvIds,
+  };
+};
 
-export const addCampaign = (campaign: Omit<Campaign, 'id' | 'ads' | 'assignedTvIds'>): Campaign => {
+const mapDbAdToAdType = (dbAd: any): AdMedia => {
+    return {
+        id: dbAd.id,
+        name: dbAd.name,
+        type: dbAd.type,
+        url: dbAd.url,
+        fileName: dbAd.fileName,
+        durationSeconds: dbAd.durationSeconds,
+        startTime: dbAd.startTime instanceof Date ? dbAd.startTime.toISOString() : dbAd.startTime,
+        endTime: dbAd.endTime instanceof Date ? dbAd.endTime.toISOString() : dbAd.endTime,
+        // dataAIHint se mapira iz data_ai_hint
+        dataAIHint: dbAd.dataAiHint 
+    };
+}
+
+
+export const getCampaigns = async (): Promise<Campaign[]> => {
+  const campaignRows = await query<any>('SELECT id, name, start_time, end_time FROM campaigns');
+  const campaignsList: Campaign[] = [];
+
+  for (const campRow of campaignRows) {
+    const adRows = await query<any>('SELECT id, name, type, url, file_name, duration_seconds, start_time, end_time, data_ai_hint FROM ads WHERE campaign_id = ?', [campRow.id]);
+    const ads = adRows.map(mapDbAdToAdType);
+    
+    const tvIdRows = await query<any>('SELECT tv_id FROM campaign_tvs WHERE campaign_id = ?', [campRow.id]);
+    const assignedTvIds = tvIdRows.map(row => row.tv_id);
+    
+    campaignsList.push(mapDbCampaignToCampaignType(mapToCamelCase(campRow), ads, assignedTvIds));
+  }
+  return campaignsList;
+};
+
+export const getCampaignById = async (id: string): Promise<Campaign | undefined> => {
+  const campaignRows = await query<any>('SELECT id, name, start_time, end_time FROM campaigns WHERE id = ?', [id]);
+  if (campaignRows.length === 0) return undefined;
+
+  const campRow = campaignRows[0];
+  const adRows = await query<any>('SELECT id, name, type, url, file_name, duration_seconds, start_time, end_time, data_ai_hint FROM ads WHERE campaign_id = ?', [id]);
+  const ads = adRows.map(mapDbAdToAdType);
+
+  const tvIdRows = await query<any>('SELECT tv_id FROM campaign_tvs WHERE campaign_id = ?', [id]);
+  const assignedTvIds = tvIdRows.map(row => row.tv_id);
+
+  return mapDbCampaignToCampaignType(mapToCamelCase(campRow), ads, assignedTvIds);
+};
+
+export const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'ads' | 'assignedTvIds'>): Promise<Campaign> => {
+  const newId = `campaign${Date.now()}`;
   const newCampaign: Campaign = {
-    ...campaign,
-    id: `campaign${campaigns.length + 1}_${Date.now()}`,
+    ...campaignData,
+    id: newId,
+    startTime: new Date(campaignData.startTime).toISOString(), // Osiguravamo ISO format
+    endTime: new Date(campaignData.endTime).toISOString(),   // Osiguravamo ISO format
     ads: [],
     assignedTvIds: [],
   };
-  campaigns = [...campaigns, newCampaign];
+  await execute('INSERT INTO campaigns (id, name, start_time, end_time) VALUES (?, ?, ?, ?)', [
+    newCampaign.id,
+    newCampaign.name,
+    newCampaign.startTime, // Već je ISO string
+    newCampaign.endTime,   // Već je ISO string
+  ]);
   return newCampaign;
 };
 
-export const updateCampaign = (updatedCampaign: Campaign): Campaign | undefined => {
-  const index = campaigns.findIndex(c => c.id === updatedCampaign.id);
-  if (index !== -1) {
-    campaigns[index] = updatedCampaign;
-    return campaigns[index];
+export const updateCampaign = async (updatedCampaign: Pick<Campaign, 'id' | 'name' | 'startTime' | 'endTime'>): Promise<Campaign | undefined> => {
+  const result = await execute<OkPacket>(
+    'UPDATE campaigns SET name = ?, start_time = ?, end_time = ? WHERE id = ?',
+    [
+      updatedCampaign.name,
+      new Date(updatedCampaign.startTime).toISOString(),
+      new Date(updatedCampaign.endTime).toISOString(),
+      updatedCampaign.id,
+    ]
+  );
+  if (result.affectedRows > 0) {
+    return getCampaignById(updatedCampaign.id); // Vraćamo puni objekt kampanje
   }
   return undefined;
 };
 
-export const deleteCampaign = (id: string): boolean => {
-  const initialLength = campaigns.length;
-  campaigns = campaigns.filter(c => c.id !== id);
-  return campaigns.length < initialLength;
+export const deleteCampaign = async (id: string): Promise<boolean> => {
+  // ON DELETE CASCADE u ads i campaign_tvs će obrisati povezane zapise
+  const result = await execute<OkPacket>('DELETE FROM campaigns WHERE id = ?', [id]);
+  return result.affectedRows > 0;
 };
 
 // Ad Media Management (within a campaign)
-export const addAdToCampaign = (campaignId: string, ad: Omit<AdMedia, 'id'>): AdMedia | undefined => {
-  const campaign = getCampaignById(campaignId);
+export const addAdToCampaign = async (campaignId: string, adData: Omit<AdMedia, 'id'>): Promise<AdMedia | undefined> => {
+  const campaign = await getCampaignById(campaignId);
   if (!campaign) return undefined;
-  const newAd: AdMedia = { ...ad, id: `ad${campaign.ads.length + 1}_${Date.now()}` };
-  campaign.ads.push(newAd);
-  updateCampaign(campaign); // Persist changes
+
+  const newAdId = `ad${Date.now()}`;
+  const newAd: AdMedia = { 
+    ...adData, 
+    id: newAdId,
+    startTime: adData.startTime ? new Date(adData.startTime).toISOString() : undefined,
+    endTime: adData.endTime ? new Date(adData.endTime).toISOString() : undefined,
+  };
+  
+  await execute(
+    'INSERT INTO ads (id, campaign_id, name, type, url, file_name, duration_seconds, start_time, end_time, data_ai_hint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      newAd.id,
+      campaignId,
+      newAd.name,
+      newAd.type,
+      newAd.url,
+      newAd.fileName,
+      newAd.durationSeconds,
+      newAd.startTime,
+      newAd.endTime,
+      newAd.dataAIHint
+    ]
+  );
   return newAd;
 };
 
-export const updateAdInCampaign = (campaignId: string, updatedAd: AdMedia): AdMedia | undefined => {
-  const campaign = getCampaignById(campaignId);
-  if (!campaign) return undefined;
-  const adIndex = campaign.ads.findIndex(ad => ad.id === updatedAd.id);
-  if (adIndex !== -1) {
-    campaign.ads[adIndex] = updatedAd;
-    updateCampaign(campaign); // Persist changes
-    return campaign.ads[adIndex];
-  }
-  return undefined;
+export const updateAdInCampaign = async (campaignId: string, updatedAd: AdMedia): Promise<AdMedia | undefined> => {
+   const result = await execute<OkPacket>(
+    'UPDATE ads SET name = ?, type = ?, url = ?, file_name = ?, duration_seconds = ?, start_time = ?, end_time = ?, data_ai_hint = ? WHERE id = ? AND campaign_id = ?',
+    [
+      updatedAd.name,
+      updatedAd.type,
+      updatedAd.url,
+      updatedAd.fileName,
+      updatedAd.durationSeconds,
+      updatedAd.startTime ? new Date(updatedAd.startTime).toISOString() : null,
+      updatedAd.endTime ? new Date(updatedAd.endTime).toISOString() : null,
+      updatedAd.dataAIHint,
+      updatedAd.id,
+      campaignId,
+    ]
+  );
+  return result.affectedRows > 0 ? updatedAd : undefined;
 };
 
-export const deleteAdFromCampaign = (campaignId: string, adId: string): boolean => {
-  const campaign = getCampaignById(campaignId);
-  if (!campaign) return false;
-  const initialAdsLength = campaign.ads.length;
-  campaign.ads = campaign.ads.filter(ad => ad.id !== adId);
-  if (campaign.ads.length < initialAdsLength) {
-    updateCampaign(campaign); // Persist changes
-    return true;
-  }
-  return false;
+export const deleteAdFromCampaign = async (campaignId: string, adId: string): Promise<boolean> => {
+  const result = await execute<OkPacket>('DELETE FROM ads WHERE id = ? AND campaign_id = ?', [adId, campaignId]);
+  return result.affectedRows > 0;
 };
 
 // Scheduling and Conflict
-export const assignCampaignToTV = (campaignId: string, tvId: string): boolean => {
-  const campaign = getCampaignById(campaignId);
-  const tv = getTVById(tvId);
-  if (!campaign || !tv) return false;
-
-  if (!campaign.assignedTvIds.includes(tvId)) {
-    campaign.assignedTvIds.push(tvId);
-    updateCampaign(campaign);
+export const assignCampaignToTV = async (campaignId: string, tvId: string): Promise<boolean> => {
+  try {
+    await execute('INSERT INTO campaign_tvs (campaign_id, tv_id) VALUES (?, ?)', [campaignId, tvId]);
     return true;
-  }
-  return false; // Already assigned
-};
-
-export const unassignCampaignFromTV = (campaignId: string, tvId: string): boolean => {
-  const campaign = getCampaignById(campaignId);
-  if (!campaign) return false;
-
-  const initialLength = campaign.assignedTvIds.length;
-  campaign.assignedTvIds = campaign.assignedTvIds.filter(id => id !== tvId);
-  if (campaign.assignedTvIds.length < initialLength) {
-    updateCampaign(campaign);
-    return true;
-  }
-  return false;
-};
-
-
-// This is a simplified conflict check. A real implementation would be more robust.
-export const hasConflict = (tvId: string, newCampaign: Campaign): Campaign | null => {
-  const tvCampaigns = campaigns.filter(c => c.assignedTvIds.includes(tvId) && c.id !== newCampaign.id);
-  const newStartTime = new Date(newCampaign.startTime).getTime();
-  const newEndTime = new Date(newCampaign.endTime).getTime();
-
-  for (const existingCampaign of tvCampaigns) {
-    const existingStartTime = new Date(existingCampaign.startTime).getTime();
-    const existingEndTime = new Date(existingCampaign.endTime).getTime();
-
-    // Check for overlap: (StartA <= EndB) and (EndA >= StartB)
-    if (newStartTime < existingEndTime && newEndTime > existingStartTime) {
-      return existingCampaign; // Conflict found
+  } catch (error: any) {
+    if (error.code === 'ER_DUP_ENTRY') { // Ako veza već postoji
+      return true; // Smatramo uspješnim jer je ciljano stanje postignuto
     }
+    console.error("Greška pri dodjeli kampanje TV-u:", error);
+    return false;
   }
-  return null; // No conflict
+};
+
+export const unassignCampaignFromTV = async (campaignId: string, tvId: string): Promise<boolean> => {
+  const result = await execute<OkPacket>('DELETE FROM campaign_tvs WHERE campaign_id = ? AND tv_id = ?', [campaignId, tvId]);
+  return result.affectedRows > 0;
+};
+
+export const hasConflict = async (tvId: string, newCampaign: Pick<Campaign, 'id' | 'startTime' | 'endTime'>): Promise<Campaign | null> => {
+  const newStartTime = new Date(newCampaign.startTime);
+  const newEndTime = new Date(newCampaign.endTime);
+
+  const sql = `
+    SELECT c.id, c.name, c.start_time, c.end_time 
+    FROM campaigns c
+    JOIN campaign_tvs ct ON c.id = ct.campaign_id
+    WHERE ct.tv_id = ? 
+      AND c.id != ?
+      AND (
+        (c.start_time <= ? AND c.end_time >= ?) OR -- Postojeća obuhvaća novu
+        (c.start_time >= ? AND c.start_time < ?) OR -- Nova počinje unutar postojeće
+        (c.end_time > ? AND c.end_time <= ?)     -- Nova završava unutar postojeće
+      )
+    LIMIT 1;
+  `;
+  // Parametri za upit: tvId, newCampaign.id, newEndTime, newStartTime, newStartTime, newEndTime, newStartTime, newEndTime
+  const conflictingCampaigns = await query<any>(sql, [
+    tvId,
+    newCampaign.id,
+    newEndTime.toISOString(), newStartTime.toISOString(), // Za (StartA <= EndB) and (EndA >= StartB)
+    newStartTime.toISOString(), newEndTime.toISOString(),   // Za početak nove unutar postojeće
+    newStartTime.toISOString(), newEndTime.toISOString()    // Za kraj nove unutar postojeće
+  ]);
+
+  if (conflictingCampaigns.length > 0) {
+    // Dohvati puni objekt kampanje koja se sukobljava za prikaz
+    const conflictData = mapToCamelCase(conflictingCampaigns[0]);
+    // Vraćamo samo osnovne podatke jer ne trebamo oglase i TV-e za poruku o sukobu
+    return {
+        id: conflictData.id,
+        name: conflictData.name,
+        startTime: conflictData.startTime, // Ovo bi već trebao biti ISO string iz mapToCamelCase
+        endTime: conflictData.endTime,     // Ovo bi već trebao biti ISO string
+        ads: [], // Nije potrebno za poruku o sukobu
+        assignedTvIds: [] // Nije potrebno za poruku o sukobu
+    } as Campaign;
+  }
+  return null;
 };
