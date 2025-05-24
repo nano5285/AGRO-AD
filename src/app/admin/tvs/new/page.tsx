@@ -30,14 +30,14 @@ export default function NewTVPage() {
     try {
       const newTV = addTV(data);
       toast({
-        title: 'TV Created Successfully!',
-        description: `TV "${newTV.name}" has been added with ID: ${newTV.id}.`,
+        title: 'TV uspješno stvoren!',
+        description: `TV "${newTV.name}" je dodan s ID-om: ${newTV.id}.`,
       });
       router.push('/admin/tvs');
     } catch (error) {
       toast({
-        title: 'Error Creating TV',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+        title: 'Greška pri stvaranju TV-a',
+        description: error instanceof Error ? error.message : 'Dogodila se neočekivana pogreška.',
         variant: 'destructive',
       });
     }
@@ -46,11 +46,11 @@ export default function NewTVPage() {
   return (
     <>
       <PageHeader
-        title="Create New TV"
-        description="Add a new display unit to your network."
+        title="Stvori novi TV"
+        description="Dodajte novu zaslonsku jedinicu u svoju mrežu."
         actions={
             <Button variant="outline" asChild>
-                <Link href="/admin/tvs"><ArrowLeft className="mr-2 h-4 w-4" /> Back to TV List</Link>
+                <Link href="/admin/tvs"><ArrowLeft className="mr-2 h-4 w-4" /> Natrag na popis TV prijemnika</Link>
             </Button>
         }
       />
@@ -58,8 +58,8 @@ export default function NewTVPage() {
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <Card>
             <CardHeader>
-              <CardTitle>TV Details</CardTitle>
-              <CardDescription>Provide the necessary information for the new TV.</CardDescription>
+              <CardTitle>Detalji TV-a</CardTitle>
+              <CardDescription>Unesite potrebne informacije za novi TV.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -67,9 +67,9 @@ export default function NewTVPage() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>TV Name</FormLabel>
+                    <FormLabel>Naziv TV-a</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Lobby Main Screen" {...field} />
+                      <Input placeholder="npr. Glavni zaslon u predvorju" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -80,9 +80,9 @@ export default function NewTVPage() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormLabel>Opis (nije obavezno)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g., Located near the main entrance, visible to all visitors." {...field} />
+                      <Textarea placeholder="npr. Smješten blizu glavnog ulaza, vidljiv svim posjetiteljima." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -91,7 +91,7 @@ export default function NewTVPage() {
             </CardContent>
             <CardFooter className="flex justify-end">
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Creating...' : 'Create TV'}
+                {form.formState.isSubmitting ? 'Stvaranje...' : 'Stvori TV'}
               </Button>
             </CardFooter>
           </Card>

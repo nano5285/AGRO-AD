@@ -10,6 +10,7 @@ import { PlusCircle, Search, Edit, Trash2, CalendarDays, Tv } from 'lucide-react
 import type { Campaign } from '@/lib/types';
 import { getCampaigns as fetchCampaigns, deleteCampaign as removeCampaign, getTVs } from '@/lib/data';
 import { format } from 'date-fns';
+import { hr } from 'date-fns/locale';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,13 +40,13 @@ export default function CampaignsPage() {
     if (success) {
       setCampaigns(fetchCampaigns()); // Refresh list
       toast({
-        title: "Campaign Deleted",
-        description: `Campaign with ID ${campaignId} has been successfully deleted.`,
+        title: "Kampanja obrisana",
+        description: `Kampanja s ID-om ${campaignId} uspješno je obrisana.`,
       });
     } else {
       toast({
-        title: "Error",
-        description: "Failed to delete campaign.",
+        title: "Greška",
+        description: "Brisanje kampanje nije uspjelo.",
         variant: "destructive",
       });
     }
@@ -60,20 +61,20 @@ export default function CampaignsPage() {
     const startTime = new Date(campaign.startTime);
     const endTime = new Date(campaign.endTime);
 
-    if (now < startTime) return { text: 'Scheduled', variant: 'outline' };
-    if (now > endTime) return { text: 'Expired', variant: 'secondary' };
-    return { text: 'Active', variant: 'default' }; // Default is often primary in Badge
+    if (now < startTime) return { text: 'Zakazana', variant: 'outline' };
+    if (now > endTime) return { text: 'Istekla', variant: 'secondary' };
+    return { text: 'Aktivna', variant: 'default' };
   };
 
 
   return (
     <>
       <PageHeader
-        title="Manage Campaigns"
-        description="Create, edit, and schedule your ad campaigns."
+        title="Upravljanje kampanjama"
+        description="Stvarajte, uređujte i zakazujte svoje oglasne kampanje."
         actions={
           <Button asChild>
-            <Link href="/admin/campaigns/new"><PlusCircle className="mr-2 h-4 w-4" /> Create New Campaign</Link>
+            <Link href="/admin/campaigns/new"><PlusCircle className="mr-2 h-4 w-4" /> Stvori novu kampanju</Link>
           </Button>
         }
       />
@@ -83,7 +84,7 @@ export default function CampaignsPage() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search campaigns by name..."
+            placeholder="Pretraži kampanje po nazivu..."
             className="pl-8 w-full sm:w-1/2 md:w-1/3"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -95,12 +96,12 @@ export default function CampaignsPage() {
          <Card>
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">
-              {campaigns.length === 0 ? "No campaigns found. Start by creating a new one." : "No campaigns match your search."}
+              {campaigns.length === 0 ? "Nema pronađenih kampanja. Započnite stvaranjem nove." : "Nijedna kampanja ne odgovara vašem pretraživanju."}
             </p>
              {campaigns.length === 0 && (
                <div className="text-center mt-4">
                  <Button asChild>
-                    <Link href="/admin/campaigns/new"><PlusCircle className="mr-2 h-4 w-4" /> Create Campaign</Link>
+                    <Link href="/admin/campaigns/new"><PlusCircle className="mr-2 h-4 w-4" /> Stvori kampanju</Link>
                  </Button>
                </div>
             )}
@@ -124,48 +125,48 @@ export default function CampaignsPage() {
                   </div>
                   <CardDescription className="flex items-center text-xs text-muted-foreground">
                     <CalendarDays className="h-3 w-3 mr-1" />
-                    {format(new Date(campaign.startTime), 'PPp')} - {format(new Date(campaign.endTime), 'PPp')}
+                    {format(new Date(campaign.startTime), 'PPp', { locale: hr })} - {format(new Date(campaign.endTime), 'PPp', { locale: hr })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow space-y-2">
                   <p className="text-sm">
-                    <span className="font-semibold">Ads:</span> {campaign.ads.length}
+                    <span className="font-semibold">Oglasi:</span> {campaign.ads.length}
                   </p>
                   <div className="text-sm">
-                    <div className="font-semibold flex items-center"><Tv className="h-4 w-4 mr-1" /> Assigned TVs:</div>
+                    <div className="font-semibold flex items-center"><Tv className="h-4 w-4 mr-1" /> Dodijeljeni TV prijemnici:</div>
                     {campaign.assignedTvIds.length > 0 ? (
                       <p className="text-xs text-muted-foreground truncate" title={assignedTVNames}>
-                        {assignedTVNames || 'N/A'}
+                        {assignedTVNames || 'N/P'}
                       </p>
                     ) : (
-                      <p className="text-xs text-muted-foreground">None</p>
+                      <p className="text-xs text-muted-foreground">Nema</p>
                     )}
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-end gap-2 border-t pt-4">
                   <Button variant="outline" size="sm" asChild>
                     <Link href={`/admin/campaigns/${campaign.id}`}>
-                      <Edit className="mr-2 h-4 w-4" /> Manage
+                      <Edit className="mr-2 h-4 w-4" /> Upravljaj
                     </Link>
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="destructive" size="sm">
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        <Trash2 className="mr-2 h-4 w-4" /> Obriši
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Jeste li sigurni?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the campaign
+                          Ova se radnja ne može poništiti. Ovo će trajno obrisati kampanju
                           "{campaign.name}".
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>Odustani</AlertDialogCancel>
                         <AlertDialogAction onClick={() => handleDeleteCampaign(campaign.id)}>
-                          Continue
+                          Nastavi
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

@@ -24,7 +24,7 @@ export default function TVDisplayPage() {
   const loadTVInfoAndAds = useCallback(() => {
     const tv = getTVById(tvId);
     if (!tv) {
-      setError(`TV with ID "${tvId}" not found.`);
+      setError(`TV prijemnik s ID-om "${tvId}" nije pronađen.`);
       setTvInfo(null);
       setActiveAdsQueue([]);
       return;
@@ -42,12 +42,10 @@ export default function TVDisplayPage() {
         const campaignEndTime = new Date(campaign.endTime);
 
         if (now >= campaignStartTime && now <= campaignEndTime) {
-          // Campaign is active
           campaign.ads.forEach(ad => {
             const adStartTime = ad.startTime ? new Date(ad.startTime) : campaignStartTime;
             const adEndTime = ad.endTime ? new Date(ad.endTime) : campaignEndTime;
             
-            // Ensure ad times are within campaign times
             const effectiveAdStartTime = new Date(Math.max(adStartTime.getTime(), campaignStartTime.getTime()));
             const effectiveAdEndTime = new Date(Math.min(adEndTime.getTime(), campaignEndTime.getTime()));
 
@@ -59,9 +57,8 @@ export default function TVDisplayPage() {
       }
     });
     
-    // Sort ads by some logic if needed, e.g., by campaign, then by ad order. For now, keep as is.
     setActiveAdsQueue(relevantAds);
-    setCurrentIndex(0); // Reset index when ads are reloaded
+    setCurrentIndex(0); 
     if (relevantAds.length > 0) {
         setCurrentAd(relevantAds[0]);
     } else {
@@ -72,15 +69,14 @@ export default function TVDisplayPage() {
 
   useEffect(() => {
     loadTVInfoAndAds();
-    // Optional: Reload ads periodically if schedules might change frequently
-    // const interval = setInterval(loadTVInfoAndAds, 60000); // every minute
+    // Optional: const interval = setInterval(loadTVInfoAndAds, 60000); 
     // return () => clearInterval(interval);
   }, [loadTVInfoAndAds]);
 
 
   useEffect(() => {
     if (activeAdsQueue.length === 0 || !activeAdsQueue[currentIndex]) {
-      setCurrentAd(null); // No ads to display or index out of bounds
+      setCurrentAd(null); 
       return;
     }
 
@@ -88,7 +84,7 @@ export default function TVDisplayPage() {
     setCurrentAd(adToDisplay);
 
     const duration = adToDisplay.type === 'video' 
-      ? 30000 // Placeholder for video actual duration; a real video player would handle this
+      ? 30000 
       : (adToDisplay.durationSeconds || 10) * 1000;
 
     const timer = setTimeout(() => {
@@ -102,9 +98,9 @@ export default function TVDisplayPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-800 text-white p-8">
         <WifiOff size={96} className="text-red-500 mb-6" />
-        <h1 className="text-4xl font-bold mb-2">Display Error</h1>
+        <h1 className="text-4xl font-bold mb-2">Greška prikaza</h1>
         <p className="text-xl text-neutral-300">{error}</p>
-        <p className="mt-4 text-sm">Please check the TV ID or contact support.</p>
+        <p className="mt-4 text-sm">Molimo provjerite ID TV prijemnika ili kontaktirajte podršku.</p>
       </div>
     );
   }
@@ -113,7 +109,7 @@ export default function TVDisplayPage() {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-800 text-white p-8">
         <Tv2 size={96} className="text-blue-500 mb-6 animate-pulse" />
-        <h1 className="text-3xl font-bold">Initializing Display...</h1>
+        <h1 className="text-3xl font-bold">Inicijalizacija prikaza...</h1>
       </div>
     );
   }
@@ -128,7 +124,7 @@ export default function TVDisplayPage() {
               src={currentAd.url}
               alt={currentAd.name}
               layout="fill"
-              objectFit="contain" // Or "cover" depending on desired behavior
+              objectFit="contain" 
               priority
               data-ai-hint={currentAd.dataAIHint || "advertisement"}
             />
@@ -137,19 +133,19 @@ export default function TVDisplayPage() {
               src={currentAd.url}
               className="w-full h-full object-contain"
               autoPlay
-              muted // Important for autoplay in browsers
-              loop // For single video campaigns or if desired
+              muted 
+              loop 
               playsInline
-              onError={(e) => console.error("Video error:", e)}
+              onError={(e) => console.error("Video greška:", e)}
             />
           ) : (
-            <div className="text-white text-2xl">Unsupported ad type</div>
+            <div className="text-white text-2xl">Nepodržana vrsta oglasa</div>
           )}
-          {/* Optional: Display ad info overlay
+          {/* 
           <div className="absolute bottom-0 left-0 bg-black bg-opacity-50 text-white p-2 text-xs">
             <p>TV: {tvInfo.name} (ID: {tvInfo.id})</p>
-            <p>Campaign: {currentAd.campaignName}</p>
-            <p>Ad: {currentAd.name} ({currentAd.type})</p>
+            <p>Kampanja: {currentAd.campaignName}</p>
+            <p>Oglas: {currentAd.name} ({currentAd.type})</p>
           </div>
           */}
         </>
@@ -157,8 +153,8 @@ export default function TVDisplayPage() {
         <div className="flex flex-col items-center justify-center text-white p-8">
             <Tv2 size={96} className="text-neutral-500 mb-6" />
             <h1 className="text-3xl font-bold mb-2">{tvInfo.name}</h1>
-            <p className="text-xl text-neutral-400">No advertisements currently scheduled for this display.</p>
-            <p className="mt-2 text-sm text-neutral-500">Please check campaign schedules or contact an administrator.</p>
+            <p className="text-xl text-neutral-400">Trenutno nema zakazanih oglasa za ovaj prikaz.</p>
+            <p className="mt-2 text-sm text-neutral-500">Molimo provjerite rasporede kampanja ili kontaktirajte administratora.</p>
         </div>
       )}
     </div>

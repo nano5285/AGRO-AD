@@ -1,28 +1,28 @@
 import { z } from 'zod';
 
 export const tvSchema = z.object({
-  name: z.string().min(3, { message: "TV name must be at least 3 characters long." }),
+  name: z.string().min(3, { message: "Naziv TV-a mora imati najmanje 3 znaka." }),
   description: z.string().optional(),
 });
 
 export type TVFormData = z.infer<typeof tvSchema>;
 
 export const campaignSchema = z.object({
-  name: z.string().min(3, { message: "Campaign name must be at least 3 characters long." }),
-  startTime: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Invalid start date." }),
-  endTime: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Invalid end date." }),
+  name: z.string().min(3, { message: "Naziv kampanje mora imati najmanje 3 znaka." }),
+  startTime: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Nevažeći datum početka." }),
+  endTime: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Nevažeći datum završetka." }),
 }).refine(data => new Date(data.startTime) < new Date(data.endTime), {
-  message: "End date must be after start date.",
-  path: ["endTime"], // Point error to endTime field
+  message: "Datum završetka mora biti nakon datuma početka.",
+  path: ["endTime"], 
 });
 
 export type CampaignFormData = z.infer<typeof campaignSchema>;
 
 export const adMediaSchema = z.object({
-  name: z.string().min(1, "Ad name is required."),
+  name: z.string().min(1, "Naziv oglasa je obavezan."),
   type: z.enum(['image', 'gif', 'video']),
-  file: z.any().refine(file => file instanceof File || typeof file === 'string', "File is required."), // File object during upload, string (URL) if already uploaded
-  fileName: z.string().optional(), // Will be populated from file
+  file: z.any().refine(file => file instanceof File || typeof file === 'string', "Datoteka je obavezna."),
+  fileName: z.string().optional(), 
   durationSeconds: z.number().int().positive().optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
@@ -32,7 +32,7 @@ export const adMediaSchema = z.object({
   }
   return true;
 }, {
-  message: "Duration is required for images and GIFs.",
+  message: "Trajanje je obavezno za slike i GIF-ove.",
   path: ["durationSeconds"],
 }).refine(data => {
   if (data.startTime && data.endTime) {
@@ -40,7 +40,7 @@ export const adMediaSchema = z.object({
   }
   return true;
 }, {
-  message: "Ad end time must be after start time.",
+  message: "Vrijeme završetka oglasa mora biti nakon vremena početka.",
   path: ["endTime"],
 });
 

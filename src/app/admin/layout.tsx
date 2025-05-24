@@ -18,10 +18,10 @@ import { Home, Tv, Clapperboard, Settings, ChevronRight } from 'lucide-react';
 import type React from 'react';
 
 const navItems = [
-  { href: '/admin/dashboard', label: 'Dashboard', icon: Home },
-  { href: '/admin/tvs', label: 'TVs', icon: Tv },
-  { href: '/admin/campaigns', label: 'Campaigns', icon: Clapperboard },
-  // { href: '/admin/settings', label: 'Settings', icon: Settings },
+  { href: '/admin/dashboard', label: 'Nadzorna ploča', icon: Home },
+  { href: '/admin/tvs', label: 'TV prijemnici', icon: Tv },
+  { href: '/admin/campaigns', label: 'Kampanje', icon: Clapperboard },
+  // { href: '/admin/settings', label: 'Postavke', icon: Settings },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

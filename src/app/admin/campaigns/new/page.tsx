@@ -12,11 +12,9 @@ import { Input } from '@/components/ui/input';
 import { campaignSchema, type CampaignFormData } from '@/lib/schemas';
 import { addCampaign } from '@/lib/data';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, CalendarIcon } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
+import { ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
+// Ne treba `hr` locale za `datetime-local` inpute
 
 export default function NewCampaignPage() {
   const router = useRouter();
@@ -26,8 +24,8 @@ export default function NewCampaignPage() {
     resolver: zodResolver(campaignSchema),
     defaultValues: {
       name: '',
-      startTime: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      endTime: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd'T'HH:mm"), // Default to one week later
+      startTime: format(new Date(), "yyyy-MM-dd'T'HH:mm"), // Format za datetime-local input
+      endTime: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd'T'HH:mm"), // Format za datetime-local input
     },
   });
 
@@ -39,14 +37,14 @@ export default function NewCampaignPage() {
         endTime: new Date(data.endTime).toISOString(),
       });
       toast({
-        title: 'Campaign Created Successfully!',
-        description: `Campaign "${newCampaign.name}" has been added. You can now add ads and assign it to TVs.`,
+        title: 'Kampanja uspješno stvorena!',
+        description: `Kampanja "${newCampaign.name}" je dodana. Sada možete dodati oglase i dodijeliti je TV prijemnicima.`,
       });
       router.push(`/admin/campaigns/${newCampaign.id}`);
     } catch (error) {
       toast({
-        title: 'Error Creating Campaign',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+        title: 'Greška pri stvaranju kampanje',
+        description: error instanceof Error ? error.message : 'Dogodila se neočekivana pogreška.',
         variant: 'destructive',
       });
     }
@@ -55,11 +53,11 @@ export default function NewCampaignPage() {
   return (
     <>
       <PageHeader
-        title="Create New Campaign"
-        description="Set up a new advertising campaign."
+        title="Stvori novu kampanju"
+        description="Postavite novu oglasnu kampanju."
          actions={
             <Button variant="outline" asChild>
-                <Link href="/admin/campaigns"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Campaign List</Link>
+                <Link href="/admin/campaigns"><ArrowLeft className="mr-2 h-4 w-4" /> Natrag na popis kampanja</Link>
             </Button>
         }
       />
@@ -67,8 +65,8 @@ export default function NewCampaignPage() {
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <Card>
             <CardHeader>
-              <CardTitle>Campaign Details</CardTitle>
-              <CardDescription>Define the name and duration for your new campaign.</CardDescription>
+              <CardTitle>Detalji kampanje</CardTitle>
+              <CardDescription>Definirajte naziv i trajanje za svoju novu kampanju.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -76,9 +74,9 @@ export default function NewCampaignPage() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Campaign Name</FormLabel>
+                    <FormLabel>Naziv kampanje</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Summer Sale Extravaganza" {...field} />
+                      <Input placeholder="npr. Ljetna rasprodaja" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -90,7 +88,7 @@ export default function NewCampaignPage() {
                   name="startTime"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Start Date & Time</FormLabel>
+                      <FormLabel>Datum i vrijeme početka</FormLabel>
                        <FormControl>
                         <Input type="datetime-local" {...field} />
                       </FormControl>
@@ -103,7 +101,7 @@ export default function NewCampaignPage() {
                   name="endTime"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>End Date & Time</FormLabel>
+                      <FormLabel>Datum i vrijeme završetka</FormLabel>
                        <FormControl>
                         <Input type="datetime-local" {...field} />
                       </FormControl>
@@ -115,7 +113,7 @@ export default function NewCampaignPage() {
             </CardContent>
             <CardFooter className="flex justify-end">
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Creating...' : 'Create Campaign & Add Ads'}
+                {form.formState.isSubmitting ? 'Stvaranje...' : 'Stvori kampanju i dodaj oglase'}
               </Button>
             </CardFooter>
           </Card>

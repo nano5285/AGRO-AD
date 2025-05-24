@@ -38,13 +38,13 @@ export default function TVsPage() {
     if (success) {
       setTVs(fetchTVs()); // Refresh list
       toast({
-        title: "TV Deleted",
-        description: `TV with ID ${tvId} has been successfully deleted.`,
+        title: "TV obrisan",
+        description: `TV s ID-om ${tvId} uspješno je obrisan.`,
       });
     } else {
       toast({
-        title: "Error",
-        description: "Failed to delete TV.",
+        title: "Greška",
+        description: "Brisanje TV-a nije uspjelo.",
         variant: "destructive",
       });
     }
@@ -58,11 +58,11 @@ export default function TVsPage() {
   return (
     <>
       <PageHeader
-        title="Manage TVs"
-        description="View, add, or manage your display units."
+        title="Upravljanje TV prijemnicima"
+        description="Pregledajte, dodajte ili upravljajte svojim zaslonskim jedinicama."
         actions={
           <Button asChild>
-            <Link href="/admin/tvs/new"><PlusCircle className="mr-2 h-4 w-4" /> Add New TV</Link>
+            <Link href="/admin/tvs/new"><PlusCircle className="mr-2 h-4 w-4" /> Dodaj novi TV</Link>
           </Button>
         }
       />
@@ -72,7 +72,7 @@ export default function TVsPage() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search TVs by name or description..."
+            placeholder="Pretraži TV prijemnike po nazivu ili opisu..."
             className="pl-8 w-full sm:w-1/2 md:w-1/3"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -84,12 +84,12 @@ export default function TVsPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">
-              {tvs.length === 0 ? "No TVs found. Get started by adding a new TV." : "No TVs match your search criteria."}
+              {tvs.length === 0 ? "Nema pronađenih TV prijemnika. Započnite dodavanjem novog TV-a." : "Nijedan TV ne odgovara vašim kriterijima pretraživanja."}
             </p>
             {tvs.length === 0 && (
                <div className="text-center mt-4">
                  <Button asChild>
-                    <Link href="/admin/tvs/new"><PlusCircle className="mr-2 h-4 w-4" /> Add New TV</Link>
+                    <Link href="/admin/tvs/new"><PlusCircle className="mr-2 h-4 w-4" /> Dodaj novi TV</Link>
                  </Button>
                </div>
             )}
@@ -101,40 +101,40 @@ export default function TVsPage() {
             <Card key={tv.id} className="flex flex-col">
               <CardHeader>
                 <CardTitle>{tv.name}</CardTitle>
-                <CardDescription>{tv.description || 'No description provided.'}</CardDescription>
+                <CardDescription>{tv.description || 'Nema opisa.'}</CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">
                 <Badge variant="secondary">ID: {tv.id}</Badge>
                  {tv.uniqueUrl && (
                   <Button variant="link" asChild className="p-0 h-auto mt-2 block">
                     <Link href={tv.uniqueUrl} target="_blank" rel="noopener noreferrer">
-                      View Display <ExternalLink className="inline-block ml-1 h-3 w-3" />
+                      Vidi prikaz <ExternalLink className="inline-block ml-1 h-3 w-3" />
                     </Link>
                   </Button>
                 )}
               </CardContent>
               <CardFooter className="flex justify-end gap-2 border-t pt-4">
                  {/* <Button variant="outline" size="sm" disabled>
-                  <Edit3 className="mr-2 h-4 w-4" /> Edit
+                  <Edit3 className="mr-2 h-4 w-4" /> Uredi
                 </Button> */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive" size="sm">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      <Trash2 className="mr-2 h-4 w-4" /> Obriši
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogTitle>Jeste li sigurni?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the TV
-                        "{tv.name}" and unassign it from all campaigns.
+                        Ova se radnja ne može poništiti. Ovo će trajno obrisati TV
+                        "{tv.name}" i ukloniti ga iz svih kampanja.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>Odustani</AlertDialogCancel>
                       <AlertDialogAction onClick={() => handleDeleteTV(tv.id)}>
-                        Continue
+                        Nastavi
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
