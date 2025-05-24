@@ -530,7 +530,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
             <FormItem>
               <FormLabel>Medijska datoteka</FormLabel>
               <FormControl>
-                <>
+                <div>
                   <Input
                     id="file-upload"
                     type="file"
@@ -550,7 +550,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                     <UploadCloud className="mr-2 h-5 w-5" />
                     {selectedFileName || "Odaberi medijsku datoteku"}
                   </label>
-                </>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
