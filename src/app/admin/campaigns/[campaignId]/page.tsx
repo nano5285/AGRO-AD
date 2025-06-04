@@ -24,7 +24,7 @@ import {
   hasConflict, getTVById 
 } from '@/lib/data';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, PlusCircle, Trash2, Edit3, Tv as TvIconLucide, Image as ImageIcon, FileVideo, Clapperboard, Save, Info, UploadCloud, RefreshCw } from 'lucide-react'; // Preimenovao Tv ikonu iz lucide
+import { ArrowLeft, PlusCircle, Trash2, Edit3, Tv as TvIconLucide, Image as ImageIcon, FileVideo, Clapperboard, Save, Info, UploadCloud, RefreshCw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { hr } from 'date-fns/locale';
 import Image from 'next/image';
@@ -75,7 +75,7 @@ export default function CampaignDetailPage() {
       ]);
 
       if (fetchedCampaign) {
-        setCampaign(fetchedCampaign); // Ažuriraj lokalno stanje kampanje
+        setCampaign(fetchedCampaign);
         setAllTVs(fetchedTVs);
         
         const adsForForm = fetchedCampaign.ads.map(ad => ({
@@ -92,7 +92,7 @@ export default function CampaignDetailPage() {
           ads: adsForForm,
           assignedTvIds: fetchedCampaign.assignedTvIds || []
         });
-        replaceAds(adsForForm); // Sinkroniziraj useFieldArray
+        replaceAds(adsForForm);
 
       } else {
         setCampaign(null);
@@ -105,7 +105,7 @@ export default function CampaignDetailPage() {
     } finally {
       if(showLoadingIndicator) setIsLoading(false);
     }
-  }, [campaignId, router, toast, form, replaceAds]); // form i replaceAds su dependencyji
+  }, [campaignId, router, toast, form, replaceAds]);
 
   useEffect(() => {
     loadCampaignData();
@@ -124,12 +124,14 @@ export default function CampaignDetailPage() {
       };
       const result = await saveCampaignDetails(campaignToSave);
       if (result) {
-        // Ne treba setCampaign ovdje, loadCampaignData će to odraditi
         toast({ title: "Detalji kampanje ažurirani!" });
-        await loadCampaignData(false); 
       } else {
-        toast({ title: "Ažuriranje detalja kampanje nije uspjelo", description: "Podaci možda nisu promijenjeni ili je došlo do greške.", variant: "destructive" });
+        // Ovo se može dogoditi ako podaci nisu promijenjeni u bazi.
+        // Možemo prikazati neutralniju poruku ili istu kao za uspjeh.
+        toast({ title: "Postavke kampanje spremljene.", description: "Nisu detektirane promjene ili su podaci već ažurni."});
       }
+      await loadCampaignData(false); 
+      router.refresh(); // Osvježi podatke sa servera
     } catch (error) {
       console.error("Greška kod spremanja detalja kampanje:", error);
       toast({ title: "Greška kod spremanja detalja kampanje", variant: "destructive" });
@@ -163,9 +165,9 @@ export default function CampaignDetailPage() {
     try {
       const newAd = await saveAd(campaign.id, newAdData);
       if (newAd) {
-        await loadCampaignData(false); 
         toast({ title: "Oglas uspješno dodan!" });
-        // Reset forme za dodavanje oglasa je unutar AdCreator komponente
+        await loadCampaignData(false);
+        router.refresh();
       } else {
         toast({ title: "Dodavanje oglasa nije uspjelo", variant: "destructive" });
       }
@@ -175,7 +177,7 @@ export default function CampaignDetailPage() {
     }
   };
   
-  const onDeleteAd = async (adId: string) => { // Primamo adId direktno
+  const onDeleteAd = async (adId: string) => {
     if (!campaign || !adId) { 
         toast({ title: "Greška: ID oglasa nedostaje", variant: "destructive"});
         return;
@@ -183,8 +185,9 @@ export default function CampaignDetailPage() {
     try {
       const success = await removeAd(campaign.id, adId);
       if (success) {
-        await loadCampaignData(false); 
         toast({ title: "Oglas uspješno obrisan!" });
+        await loadCampaignData(false); 
+        router.refresh();
       } else {
         toast({ title: "Brisanje oglasa nije uspjelo", variant: "destructive" });
       }
@@ -222,8 +225,7 @@ export default function CampaignDetailPage() {
               duration: 7000,
             });
             conflictFound = true;
-            // Vrati checkbox na staro stanje za TV koji uzrokuje konflikt
-            form.setValue("assignedTvIds", assignedTvIdsFromForm.filter(id => id !== tvId)); 
+            form.setValue("assignedTvIds", originalAssigned); // Vrati na originalno stanje u formi
             break; 
           }
         }
@@ -234,16 +236,16 @@ export default function CampaignDetailPage() {
         return;
       }
       
-      const finalAssignedTvIds = form.getValues("assignedTvIds") || []; // Uzmi ažurirane vrijednosti
+      const finalAssignedTvIds = form.getValues("assignedTvIds") || [];
       const toAdd = finalAssignedTvIds.filter(id => !originalAssigned.includes(id));
       const toRemove = originalAssigned.filter(id => !finalAssignedTvIds.includes(id));
 
-      // Samo izvrši operacije ako ima promjena
       if (toAdd.length > 0 || toRemove.length > 0) {
         await Promise.all(toAdd.map(tvId => linkCampaignToTV(campaign.id, tvId)));
         await Promise.all(toRemove.map(tvId => unlinkCampaignFromTV(campaign.id, tvId)));
-        await loadCampaignData(false); 
         toast({ title: "Dodjele TV prijemnika ažurirane." });
+        await loadCampaignData(false); 
+        router.refresh();
       } else {
         toast({ title: "Nema promjena u dodjelama TV prijemnika." });
       }
@@ -318,69 +320,70 @@ export default function CampaignDetailPage() {
                   )} />
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" size="sm" disabled={isSubmittingCampaign}><Save className="mr-2 h-4 w-4"/> {isSubmittingCampaign ? "Spremanje..." : "Spremi detalje"}</Button>
+                  <Button type="submit" size="sm" disabled={isSubmittingCampaign || !form.formState.isDirty}><Save className="mr-2 h-4 w-4"/> {isSubmittingCampaign ? "Spremanje..." : "Spremi detalje"}</Button>
                 </CardFooter>
               </Card>
             </form>
 
-             <form onSubmit={form.handleSubmit(onAssignTVs)}> {/* handleSubmit će sada pozvati onAssignTVs bez argumenata */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center"><TvIconLucide className="mr-2 h-5 w-5" /> Dodijeli TV prijemnicima</CardTitle>
-                  <CardDescription>Odaberite TV prijemnike na kojima će se ova kampanja prikazivati.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FormField
-                    control={form.control}
-                    name="assignedTvIds"
-                    render={() => ( 
-                      <FormItem>
-                        <ScrollArea className="h-48">
-                        {allTVs.map((tv) => (
-                          <FormField
-                            key={tv.id}
-                            control={form.control}
-                            name="assignedTvIds" 
-                            render={({ field }) => {
-                              return (
-                                <FormItem
-                                  key={tv.id}
-                                  className="flex flex-row items-start space-x-3 space-y-0 py-2"
-                                >
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(tv.id)}
-                                      onCheckedChange={(checked) => {
-                                        const currentAssigned = field.value || [];
-                                        return checked
-                                          ? field.onChange([...currentAssigned, tv.id])
-                                          : field.onChange(
-                                              currentAssigned.filter(
-                                                (value) => value !== tv.id
-                                              )
+            {/* TV Assignment Section - Not a separate form submit, uses a button onClick */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center"><TvIconLucide className="mr-2 h-5 w-5" /> Dodijeli TV prijemnicima</CardTitle>
+                <CardDescription>Odaberite TV prijemnike na kojima će se ova kampanja prikazivati.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FormField
+                  control={form.control}
+                  name="assignedTvIds"
+                  render={() => ( 
+                    <FormItem>
+                      <ScrollArea className="h-48">
+                      {allTVs.map((tv) => (
+                        <FormField
+                          key={tv.id}
+                          control={form.control}
+                          name="assignedTvIds" 
+                          render={({ field }) => {
+                            return (
+                              <FormItem
+                                key={tv.id}
+                                className="flex flex-row items-start space-x-3 space-y-0 py-2"
+                              >
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(tv.id)}
+                                    onCheckedChange={(checked) => {
+                                      const currentAssigned = field.value || [];
+                                      return checked
+                                        ? field.onChange([...currentAssigned, tv.id])
+                                        : field.onChange(
+                                            currentAssigned.filter(
+                                              (value) => value !== tv.id
                                             )
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="font-normal">
-                                    {tv.name}
-                                  </FormLabel>
-                                </FormItem>
-                              )
-                            }}
-                          />
-                        ))}
-                        </ScrollArea>
-                        <FormMessage /> 
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" size="sm" disabled={isSubmittingTVs}><Save className="mr-2 h-4 w-4"/> {isSubmittingTVs ? "Ažuriranje..." : "Ažuriraj dodjele TV-a"}</Button>
-                </CardFooter>
-              </Card>
-            </form>
+                                          )
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="font-normal">
+                                  {tv.name}
+                                </FormLabel>
+                              </FormItem>
+                            )
+                          }}
+                        />
+                      ))}
+                      </ScrollArea>
+                      <FormMessage /> 
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+              <CardFooter>
+                <Button type="button" size="sm" onClick={onAssignTVs} disabled={isSubmittingTVs}>
+                  <Save className="mr-2 h-4 w-4"/> {isSubmittingTVs ? "Ažuriranje..." : "Ažuriraj dodjele TV-a"}
+                </Button>
+              </CardFooter>
+            </Card>
           </Form>
         </div>
         
@@ -530,22 +533,22 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         <FormField
           control={adForm.control}
           name="file"
-          render={({ field: { onChange, value, name, ref, ...rest } }) => ( // value, name, ref su potrebni za RHF
+          render={({ field: { onChange, value, name, ref, ...rest } }) => (
             <FormItem>
               <FormLabel>Medijska datoteka</FormLabel>
               <FormControl>
-                <div> {/* Omotač je potreban jer FormControl prosljeđuje ID */}
+                <div>
                   <Input
                     id="file-upload"
                     type="file"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      onChange(file); // Javi RHF-u o promjeni
+                      onChange(file); 
                       setSelectedFileName(file ? file.name : null);
                     }}
-                    ref={ref} // Poveži ref za RHF
-                    {...rest} // Ostali props koje RHF može trebati
+                    ref={ref} 
+                    {...rest} 
                   />
                   <label
                     htmlFor="file-upload"
@@ -589,5 +592,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
     </Form>
   );
 }
+
+    
 
     
