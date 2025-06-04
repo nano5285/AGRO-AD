@@ -32,6 +32,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// Helper funkcija za pretvaranje File u Data URL
+const fileToDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function CampaignDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -96,15 +106,15 @@ export default function CampaignDetailPage() {
         
           return {
             ...ad, 
-            file: ad.url, 
+            file: ad.url, // Koristimo URL za 'file' jer je to ono što će Image komponenta koristiti. Stvarni File objekt nije potreban za prikaz postojećih oglasa.
             startTime: adStartTime,
             endTime: adEndTime,
             durationSeconds: duration,
           };
         });
         
-        const campStartTime = isDateValid(parseISO(fetchedCampaign.startTime)) ? format(parseISO(fetchedCampaign.startTime), "yyyy-MM-dd'T'HH:mm") : '';
-        const campEndTime = isDateValid(parseISO(fetchedCampaign.endTime)) ? format(parseISO(fetchedCampaign.endTime), "yyyy-MM-dd'T'HH:mm") : '';
+        const campStartTime = fetchedCampaign.startTime && isDateValid(parseISO(fetchedCampaign.startTime)) ? format(parseISO(fetchedCampaign.startTime), "yyyy-MM-dd'T'HH:mm") : '';
+        const campEndTime = fetchedCampaign.endTime && isDateValid(parseISO(fetchedCampaign.endTime)) ? format(parseISO(fetchedCampaign.endTime), "yyyy-MM-dd'T'HH:mm") : '';
 
         const resetData = {
           name: fetchedCampaign.name,
@@ -113,7 +123,6 @@ export default function CampaignDetailPage() {
           ads: adsForForm,
           assignedTvIds: fetchedCampaign.assignedTvIds || []
         };
-        // console.log('Reseting form with data:', resetData);
         form.reset(resetData);
         replaceAds(adsForForm); 
 
@@ -136,7 +145,6 @@ export default function CampaignDetailPage() {
 
 
   const onSubmitCampaignDetails = async (data: CampaignEditPageFormData) => { 
-    // console.log('onSubmitCampaignDetails CALLED with data:', data);
     if (!campaign) {
       toast({ title: "Greška: Kampanja nije učitana.", variant: "destructive" });
       return;
@@ -164,53 +172,40 @@ export default function CampaignDetailPage() {
   };
 
   const handleCampaignDetailsSubmitAttempt = async () => {
-    // console.log('--- Spremi detalje button CLICKED (Attempt) ---');
     const currentValues = form.getValues();
-    // console.log('Current form values for manual Zod parse:', currentValues);
-    
     try {
-      campaignEditPageSchema.parse(currentValues); // Try to parse
-      // console.log('Zod schema validation PASSED manually.');
+      campaignEditPageSchema.parse(currentValues); 
       await onSubmitCampaignDetails(currentValues);
     } catch (error) {
-      // console.error('Zod schema validation FAILED manually:', JSON.stringify(error, null, 2));
        toast({
         title: "Greška u validaciji forme",
         description: "Provjerite unesene podatke. Neka polja možda nisu ispravna.",
         variant: "destructive",
         duration: 7000,
       });
-      // Log details of Zod error for easier debugging if needed in the future
       if (error instanceof z.ZodError) {
         console.error("Zod validation errors:", JSON.stringify(error.flatten().fieldErrors, null, 2));
       }
     }
-    // console.log('form.formState.isDirty:', form.formState.isDirty);
-    // console.log('form.formState.isValid (after attempt):', form.formState.isValid);
-    // console.log('form.formState.errors (JSON after attempt):', JSON.stringify(form.formState.errors, null, 2));
   };
 
 
-  const onAddAd = async (data: AdMediaFormData) => {
+  const onAddAd = async (adFormData: AdMediaFormData) => {
     if (!campaign) return;
     
-    const fileName = data.file instanceof File ? data.file.name : (typeof data.file === 'string' ? data.file.substring(data.file.lastIndexOf('/')+1) : 'nepoznata_datoteka');
-    let adUrl = data.url; 
-    if (data.file instanceof File) { 
-      adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png`;
-    } else if (!adUrl) { 
-      adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png`;
-    }
+    // `adFormData.url` će biti DataURL (za slike/gif) ili placeholder (za video), pripremljen od strane AdCreator-a
+    // `adFormData.fileName` će također biti pripremljen
+    // `adFormData.file` je originalni File objekt, koji ovdje nije potreban za spremanje, ali AdCreator ga koristi za reset
     
     const newAdData: Omit<AdMedia, 'id'> = {
-      name: data.name,
-      type: data.type,
-      url: adUrl, 
-      fileName: fileName,
-      durationSeconds: data.durationSeconds,
-      startTime: data.startTime && data.startTime !== '' ? new Date(data.startTime).toISOString() : undefined,
-      endTime: data.endTime && data.endTime !== '' ? new Date(data.endTime).toISOString() : undefined,
-      dataAIHint: data.file instanceof File ? data.name.substring(0,50) : data.dataAIHint, 
+      name: adFormData.name,
+      type: adFormData.type,
+      url: adFormData.url || (adFormData.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : 'https://placehold.co/300x200.png'), // Fallback ako URL nije postavljen
+      fileName: adFormData.fileName || 'nepoznata_datoteka',
+      durationSeconds: adFormData.durationSeconds,
+      startTime: adFormData.startTime && adFormData.startTime !== '' ? new Date(adFormData.startTime).toISOString() : undefined,
+      endTime: adFormData.endTime && adFormData.endTime !== '' ? new Date(adFormData.endTime).toISOString() : undefined,
+      dataAIHint: adFormData.dataAIHint, 
     };
 
     try {
@@ -219,6 +214,7 @@ export default function CampaignDetailPage() {
         toast({ title: "Oglas uspješno dodan!" });
         await loadCampaignData(false);
         router.refresh();
+        // AdCreator će sam resetirati svoju formu.
       } else {
         toast({ title: "Dodavanje oglasa nije uspjelo", variant: "destructive" });
       }
@@ -331,6 +327,9 @@ export default function CampaignDetailPage() {
   );
   if (!campaign) return null;
 
+  const campaignStartTimeForAdCreator = form.getValues("startTime") || (campaign?.startTime && isDateValid(parseISO(campaign.startTime)) ? format(parseISO(campaign.startTime), "yyyy-MM-dd'T'HH:mm") : "");
+  const campaignEndTimeForAdCreator = form.getValues("endTime") || (campaign?.endTime && isDateValid(parseISO(campaign.endTime)) ? format(parseISO(campaign.endTime), "yyyy-MM-dd'T'HH:mm") : "");
+  
   return (
     <>
       <PageHeader
@@ -351,9 +350,7 @@ export default function CampaignDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Form {...form}>
-            {/* Form tag for campaign details - onSubmit will be triggered by its submit button if type="submit" */}
-            {/* However, we are using type="button" and onClick to handle submission via handleCampaignDetailsSubmitAttempt */}
-            <form onSubmit={(e) => e.preventDefault()}> {/* Prevent default HTML form submission */}
+            <form onSubmit={(e) => e.preventDefault()}> 
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center"><Edit3 className="mr-2 h-5 w-5" /> Postavke kampanje</CardTitle>
@@ -394,7 +391,6 @@ export default function CampaignDetailPage() {
               </Card>
             </form>
 
-            {/* This part is NOT a form, button triggers onAssignTVs directly */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><TvIconLucide className="mr-2 h-5 w-5" /> Dodijeli TV prijemnicima</CardTitle>
@@ -466,8 +462,8 @@ export default function CampaignDetailPage() {
               <AdCreator 
                 campaignId={campaignId} 
                 onAdAdded={onAddAd} 
-                campaignStartTime={form.getValues("startTime") || (campaign?.startTime && isDateValid(parseISO(campaign.startTime)) ? format(parseISO(campaign.startTime), "yyyy-MM-dd'T'HH:mm") : "")} 
-                campaignEndTime={form.getValues("endTime") || (campaign?.endTime && isDateValid(parseISO(campaign.endTime)) ? format(parseISO(campaign.endTime), "yyyy-MM-dd'T'HH:mm") : "")}
+                campaignStartTime={campaignStartTimeForAdCreator} 
+                campaignEndTime={campaignEndTimeForAdCreator}
               />
               
               <Separator className="my-6" />
@@ -498,9 +494,10 @@ export default function CampaignDetailPage() {
                           <Image 
                             src={ (form.watch(`ads.${index}.file`) instanceof File ? URL.createObjectURL(form.watch(`ads.${index}.file`) as File) : form.watch(`ads.${index}.file`)) as string || "https://placehold.co/100x50.png" } 
                             alt={form.watch(`ads.${index}.name`) || 'Pregled oglasa'} 
-                            width={100} height={50} className="rounded border" 
+                            width={100} height={50} className="rounded border object-contain" 
                             data-ai-hint={form.watch(`ads.${index}.dataAIHint`) || "advertisement preview"}
                             onLoad={form.watch(`ads.${index}.file`) instanceof File ? () => URL.revokeObjectURL(form.watch(`ads.${index}.file`) as string) : undefined}
+                            onError={(e) => console.error("Greška pri učitavanju slike oglasa:", e.currentTarget.src)}
                           />
                         }
                         { form.watch(`ads.${index}.type`) === 'video' &&
@@ -528,7 +525,7 @@ export default function CampaignDetailPage() {
 
 interface AdCreatorProps {
   campaignId: string;
-  onAdAdded: (data: AdMediaFormData) => Promise<void>;
+  onAdAdded: (data: AdMediaFormData) => Promise<void>; // AdMediaFormData će sada imati url kao DataURL
   campaignStartTime: string;
   campaignEndTime: string;
 }
@@ -536,21 +533,57 @@ interface AdCreatorProps {
 function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }: AdCreatorProps) {
   const [isSubmittingAd, setIsSubmittingAd] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const { toast } = useToast(); // Dodan toast za AdCreator
 
   const adForm = useForm<AdMediaFormData>({
     resolver: zodResolver(adMediaSchema),
     defaultValues: {
       name: '',
       type: 'image',
-      file: undefined,
+      file: undefined, // File objekt
+      url: undefined,  // Inicijalno nema URL-a
+      fileName: undefined,
       durationSeconds: 10,
       startTime: '', 
       endTime: '',
+      dataAIHint: undefined,
     }
   });
 
   const onSubmitAd = async (data: AdMediaFormData) => {
     setIsSubmittingAd(true);
+    
+    let generatedUrl = data.url; // Postojeći URL, ako ga ima
+    let generatedFileName = data.fileName;
+    let generatedDataAIHint = data.dataAIHint;
+
+    if (data.file instanceof File) {
+      generatedFileName = data.file.name;
+      generatedDataAIHint = data.name ? data.name.substring(0, 50) : data.file.name.substring(0, 50);
+
+      if (data.type === 'image' || data.type === 'gif') {
+        try {
+          generatedUrl = await fileToDataUrl(data.file);
+        } catch (error) {
+          console.error("Greška pri pretvaranju datoteke u Data URL u AdCreator:", error);
+          toast({ title: "Greška pri obradi slike", description: "Nije moguće pretvoriti datoteku u DataURL.", variant: "destructive" });
+          setIsSubmittingAd(false);
+          return;
+        }
+      } else if (data.type === 'video') {
+        // Za video ne generiramo Data URL, koristimo placeholder ako nema postojećeg.
+        // Aplikacija trenutno ne podržava stvarni upload videa.
+        generatedUrl = data.url || 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4';
+      }
+    } else if (!generatedUrl) { // Ako nema ni datoteke ni postojećeg URL-a
+      if (data.type === 'image' || data.type === 'gif') {
+        generatedUrl = `https://placehold.co/300x200.png`;
+        generatedDataAIHint = "placeholder image";
+      } else {
+        generatedUrl = 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4';
+        generatedDataAIHint = "sample video";
+      }
+    }
     
     let finalStartTime = data.startTime;
     if (!finalStartTime || finalStartTime === '') {
@@ -562,17 +595,24 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         finalEndTime = campaignEndTime && isDateValid(new Date(campaignEndTime)) ? campaignEndTime : undefined;
     }
     
-    const dataToSubmit = { ...data, startTime: finalStartTime, endTime: finalEndTime };
+    const dataToSubmit: AdMediaFormData = { 
+        ...data, 
+        url: generatedUrl, 
+        fileName: generatedFileName,
+        dataAIHint: generatedDataAIHint,
+        startTime: finalStartTime, 
+        endTime: finalEndTime 
+    };
 
     try {
-        await onAdAdded(dataToSubmit);
+        await onAdAdded(dataToSubmit); // Pozovi prop s pripremljenim podacima
         adForm.reset({ 
-            name: '', type: 'image', file: undefined, durationSeconds: 10, 
-            startTime: '', endTime: '' 
+            name: '', type: 'image', file: undefined, url: undefined, fileName: undefined, 
+            durationSeconds: 10, startTime: '', endTime: '', dataAIHint: undefined,
         });
         setSelectedFileName(null);
     } catch (error) {
-        console.error("Greška pri slanju forme za oglas:", error);
+        console.error("Greška pri slanju forme za oglas (iz AdCreator):", error);
          toast({
             title: "Greška kod dodavanja oglasa",
             description: error instanceof Error ? error.message : "Pokušajte ponovno.",
@@ -597,7 +637,13 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         )} />
         <FormField control={adForm.control} name="type" render={({ field }) => (
           <FormItem><FormLabel>Vrsta</FormLabel>
-            <Select onValueChange={field.onChange} defaultValue={field.value}>
+            <Select onValueChange={(value) => {
+                field.onChange(value);
+                // Resetiraj file input ako se promijeni vrsta, da se izbjegne nekonzistentnost
+                adForm.setValue("file", undefined);
+                setSelectedFileName(null);
+                adForm.setValue("url", undefined); // Resetiraj i URL
+            }} defaultValue={field.value}>
               <FormControl><SelectTrigger><SelectValue placeholder="Odaberite vrstu oglasa" /></SelectTrigger></FormControl>
               <SelectContent>
                 <SelectItem value="image">Slika</SelectItem>
@@ -610,7 +656,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
 
         <FormField
           control={adForm.control}
-          name="file"
+          name="file" // Ovo polje će sadržavati File objekt
           render={({ field: { onChange, value, name, ref, ...rest } }) => ( 
             <FormItem>
               <FormLabel>Medijska datoteka</FormLabel>
@@ -620,10 +666,12 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                     id="file-upload"
                     type="file"
                     className="hidden" 
+                    accept={adType === 'video' ? 'video/*' : 'image/png, image/jpeg, image/gif'}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      onChange(file); 
+                      onChange(file); // Spremi File objekt u formu
                       setSelectedFileName(file ? file.name : null);
+                      adForm.setValue("url", undefined); // Resetiraj URL jer je odabrana nova datoteka
                     }}
                     ref={ref} 
                     {...rest} 
@@ -638,6 +686,12 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                 </div>
               </FormControl>
               <FormMessage />
+              {/* Prikaz pregleda odabrane slike ako je tip image/gif i file je odabran */}
+              {data.file instanceof File && (adType === 'image' || adType === 'gif') && (
+                <div className="mt-2">
+                  <Image src={URL.createObjectURL(data.file)} alt="Pregled" width={100} height={100} className="rounded border object-contain" />
+                </div>
+              )}
             </FormItem>
           )}
         />
