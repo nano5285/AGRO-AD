@@ -1,4 +1,3 @@
-
 'use server';
 import type { TV, Campaign, AdMedia, User } from './types'; // Dodan User tip
 import { query, execute } from './db';
@@ -11,7 +10,13 @@ const mapToCamelCase = (row: any): any => {
     const camelKey = key.replace(/([-_][a-z])/gi, ($1) =>
       $1.toUpperCase().replace('-', '').replace('_', '')
     );
-    newRow[camelKey] = row[key] instanceof Date ? row[key].toISOString() : row[key];
+    // Ako je vrijednost Date objekt iz baze, pretvori je u ISO string za konzistentnost u aplikaciji
+    // Ako je vrijednost null ili neki drugi tip, ostavi kako jest
+    if (row[key] instanceof Date) {
+      newRow[camelKey] = row[key].toISOString();
+    } else {
+      newRow[camelKey] = row[key];
+    }
   }
   return newRow;
 };
@@ -62,8 +67,9 @@ const mapDbCampaignToCampaignType = (dbCampaign: any, ads: AdMedia[], assignedTv
   return {
     id: dbCampaign.id,
     name: dbCampaign.name,
-    startTime: dbCampaign.startTime instanceof Date ? dbCampaign.startTime.toISOString() : dbCampaign.startTime,
-    endTime: dbCampaign.endTime instanceof Date ? dbCampaign.endTime.toISOString() : dbCampaign.endTime,
+    // dbCampaign.startTime/endTime su već ISO stringovi zbog mapToCamelCase
+    startTime: dbCampaign.startTime,
+    endTime: dbCampaign.endTime,
     ads,
     assignedTvIds,
   };
@@ -77,9 +83,10 @@ const mapDbAdToAdType = (dbAd: any): AdMedia => {
         url: dbAd.url,
         fileName: dbAd.fileName,
         durationSeconds: dbAd.durationSeconds,
-        startTime: dbAd.startTime instanceof Date ? dbAd.startTime.toISOString() : (dbAd.startTime || undefined),
-        endTime: dbAd.endTime instanceof Date ? dbAd.endTime.toISOString() : (dbAd.endTime || undefined),
-        dataAIHint: dbAd.dataAiHint 
+        // dbAd.startTime/endTime su ISO stringovi ili null zbog mapToCamelCase
+        startTime: dbAd.startTime || undefined,
+        endTime: dbAd.endTime || undefined,
+        dataAIHint: dbAd.dataAiHint
     };
 }
 
@@ -91,10 +98,10 @@ export const getCampaigns = async (): Promise<Campaign[]> => {
   for (const campRow of campaignRows) {
     const adRows = await query<any>('SELECT id, name, type, url, file_name, duration_seconds, start_time, end_time, data_ai_hint FROM ads WHERE campaign_id = ?', [campRow.id]);
     const ads = adRows.map(mapDbAdToAdType);
-    
+
     const tvIdRows = await query<any>('SELECT tv_id FROM campaign_tvs WHERE campaign_id = ?', [campRow.id]);
     const assignedTvIds = tvIdRows.map(row => row.tv_id);
-    
+
     campaignsList.push(mapDbCampaignToCampaignType(mapToCamelCase(campRow), ads, assignedTvIds));
   }
   return campaignsList;
@@ -116,40 +123,59 @@ export const getCampaignById = async (id: string): Promise<Campaign | undefined>
 
 export const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'ads' | 'assignedTvIds'>): Promise<Campaign> => {
   const newId = `campaign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  
+  // campaignData.startTime i campaignData.endTime su stringovi iz forme (npr. "yyyy-MM-ddTHH:mm")
+  // Pretvaramo ih u Date objekte za slanje bazi
+  const startTimeForDb = new Date(campaignData.startTime);
+  const endTimeForDb = new Date(campaignData.endTime);
+
+  // newCampaign objekt će i dalje koristiti ISO stringove za startTime i endTime zbog tipa Campaign
   const newCampaign: Campaign = {
-    ...campaignData,
+    ...campaignData, // name
     id: newId,
-    startTime: new Date(campaignData.startTime).toISOString(),
-    endTime: new Date(campaignData.endTime).toISOString(),
+    startTime: startTimeForDb.toISOString(),
+    endTime: endTimeForDb.toISOString(),
     ads: [],
     assignedTvIds: [],
   };
+
   await execute('INSERT INTO campaigns (id, name, start_time, end_time) VALUES (?, ?, ?, ?)', [
     newCampaign.id,
     newCampaign.name,
-    newCampaign.startTime,
-    newCampaign.endTime,
+    startTimeForDb, // Prosljeđujemo Date objekt bazi
+    endTimeForDb,   // Prosljeđujemo Date objekt bazi
   ]);
   return newCampaign;
 };
 
 export const updateCampaign = async (updatedCampaign: Pick<Campaign, 'id' | 'name' | 'startTime' | 'endTime'>): Promise<Campaign | undefined> => {
+  // updatedCampaign.startTime i updatedCampaign.endTime su ISO stringovi iz Campaign tipa
+  // Pretvaramo ih u Date objekte za slanje bazi
+  const startTimeForDb = new Date(updatedCampaign.startTime);
+  const endTimeForDb = new Date(updatedCampaign.endTime);
+
   const result = await execute<OkPacket>(
     'UPDATE campaigns SET name = ?, start_time = ?, end_time = ? WHERE id = ?',
     [
       updatedCampaign.name,
-      new Date(updatedCampaign.startTime).toISOString(),
-      new Date(updatedCampaign.endTime).toISOString(),
+      startTimeForDb, // Prosljeđujemo Date objekt bazi
+      endTimeForDb,   // Prosljeđujemo Date objekt bazi
       updatedCampaign.id,
     ]
   );
   if (result.affectedRows > 0) {
+    // Vraćamo puni Campaign objekt, koji će imati ISO stringove za datume
     return getCampaignById(updatedCampaign.id);
   }
   return undefined;
 };
 
 export const deleteCampaign = async (id: string): Promise<boolean> => {
+  // Prvo obriši povezane TV-e
+  await execute<OkPacket>('DELETE FROM campaign_tvs WHERE campaign_id = ?', [id]);
+  // Zatim obriši oglase (ako ON DELETE CASCADE nije postavljen za ads.campaign_id, inače je ovo suvišno)
+  // await execute<OkPacket>('DELETE FROM ads WHERE campaign_id = ?', [id]);
+  // Na kraju obriši kampanju
   const result = await execute<OkPacket>('DELETE FROM campaigns WHERE id = ?', [id]);
   return result.affectedRows > 0;
 };
@@ -160,11 +186,18 @@ export const addAdToCampaign = async (campaignId: string, adData: Omit<AdMedia, 
   if (!campaign) return undefined;
 
   const newAdId = `ad-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+  // adData.startTime i adData.endTime su stringovi iz forme (npr. "yyyy-MM-ddTHH:mm") ili prazni/undefined
+  // Pretvaramo ih u Date objekte za slanje bazi, ili null ako nisu definirani
+  const startTimeForDb = adData.startTime && adData.startTime !== '' ? new Date(adData.startTime) : null;
+  const endTimeForDb = adData.endTime && adData.endTime !== '' ? new Date(adData.endTime) : null;
+  
   const newAd: AdMedia = { 
     ...adData, 
     id: newAdId,
-    startTime: adData.startTime ? new Date(adData.startTime).toISOString() : undefined,
-    endTime: adData.endTime ? new Date(adData.endTime).toISOString() : undefined,
+    // AdMedia tip koristi ISO stringove ili undefined
+    startTime: startTimeForDb ? startTimeForDb.toISOString() : undefined,
+    endTime: endTimeForDb ? endTimeForDb.toISOString() : undefined,
   };
   
   await execute(
@@ -177,8 +210,8 @@ export const addAdToCampaign = async (campaignId: string, adData: Omit<AdMedia, 
       newAd.url,
       newAd.fileName,
       newAd.durationSeconds,
-      newAd.startTime, // Već ISO ili undefined
-      newAd.endTime,   // Već ISO ili undefined
+      startTimeForDb, // Prosljeđujemo Date objekt ili null bazi
+      endTimeForDb,   // Prosljeđujemo Date objekt ili null bazi
       newAd.dataAIHint
     ]
   );
@@ -186,6 +219,11 @@ export const addAdToCampaign = async (campaignId: string, adData: Omit<AdMedia, 
 };
 
 export const updateAdInCampaign = async (campaignId: string, updatedAd: AdMedia): Promise<AdMedia | undefined> => {
+   // updatedAd.startTime i updatedAd.endTime su ISO stringovi ili undefined iz AdMedia tipa
+   // Pretvaramo ih u Date objekte za slanje bazi, ili null ako su undefined
+   const startTimeForDb = updatedAd.startTime ? new Date(updatedAd.startTime) : null;
+   const endTimeForDb = updatedAd.endTime ? new Date(updatedAd.endTime) : null;
+
    const result = await execute<OkPacket>(
     'UPDATE ads SET name = ?, type = ?, url = ?, file_name = ?, duration_seconds = ?, start_time = ?, end_time = ?, data_ai_hint = ? WHERE id = ? AND campaign_id = ?',
     [
@@ -194,8 +232,8 @@ export const updateAdInCampaign = async (campaignId: string, updatedAd: AdMedia)
       updatedAd.url,
       updatedAd.fileName,
       updatedAd.durationSeconds,
-      updatedAd.startTime ? new Date(updatedAd.startTime).toISOString() : null,
-      updatedAd.endTime ? new Date(updatedAd.endTime).toISOString() : null,
+      startTimeForDb, // Prosljeđujemo Date objekt ili null bazi
+      endTimeForDb,   // Prosljeđujemo Date objekt ili null bazi
       updatedAd.dataAIHint,
       updatedAd.id,
       campaignId,
@@ -215,7 +253,7 @@ export const assignCampaignToTV = async (campaignId: string, tvId: string): Prom
     await execute('INSERT INTO campaign_tvs (campaign_id, tv_id) VALUES (?, ?)', [campaignId, tvId]);
     return true;
   } catch (error: any) {
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'ER_DUP_ENTRY') { // Već postoji veza, smatraj uspješnim
       return true; 
     }
     console.error("Greška pri dodjeli kampanje TV-u:", error);
@@ -229,8 +267,10 @@ export const unassignCampaignFromTV = async (campaignId: string, tvId: string): 
 };
 
 export const hasConflict = async (tvId: string, newCampaign: Pick<Campaign, 'id' | 'startTime' | 'endTime'>): Promise<Campaign | null> => {
-  const newStartTime = new Date(newCampaign.startTime);
-  const newEndTime = new Date(newCampaign.endTime);
+  // newCampaign.startTime i newCampaign.endTime su ISO stringovi
+  // Pretvaramo ih u Date objekte za usporedbu i slanje bazi
+  const newStartTimeObj = new Date(newCampaign.startTime);
+  const newEndTimeObj = new Date(newCampaign.endTime);
 
   const sql = `
     SELECT c.id, c.name, c.start_time, c.end_time 
@@ -239,24 +279,52 @@ export const hasConflict = async (tvId: string, newCampaign: Pick<Campaign, 'id'
     WHERE ct.tv_id = ? 
       AND c.id != ?
       AND (
-        (c.start_time <= ? AND c.end_time >= ?) OR 
-        (c.start_time >= ? AND c.start_time < ?) OR 
-        (c.end_time > ? AND c.end_time <= ?) OR
-        (c.start_time < ? AND c.end_time > ?) -- Nova kampanja je unutar postojeće
+        (c.start_time <= ? AND c.end_time >= ?) OR -- Postojeća obuhvaća novu
+        (c.start_time >= ? AND c.start_time < ?) OR -- Nova počinje unutar postojeće
+        (c.end_time > ? AND c.end_time <= ?) OR    -- Nova završava unutar postojeće
+        (c.start_time < ? AND c.end_time > ?)     -- Nova obuhvaća postojeću (obrnuto od prve)
       )
     LIMIT 1;
   `;
-  const conflictingCampaigns = await query<any>(sql, [
+  // Prosljeđujemo Date objekte bazi
+  const conflictingCampaignRows = await query<any>(sql, [
     tvId,
     newCampaign.id,
-    newEndTime.toISOString(), newStartTime.toISOString(), 
-    newStartTime.toISOString(), newEndTime.toISOString(),  
-    newStartTime.toISOString(), newEndTime.toISOString(),
-    newStartTime.toISOString(), newEndTime.toISOString() 
+    newEndTimeObj, newStartTimeObj,    // Za (c.start_time <= newEndTimeObj AND c.end_time >= newStartTimeObj)
+    newStartTimeObj, newEndTimeObj,    // Za (c.start_time >= newStartTimeObj AND c.start_time < newEndTimeObj)
+    newStartTimeObj, newEndTimeObj,    // Za (c.end_time > newStartTimeObj AND c.end_time <= newEndTimeObj)
+    newStartTimeObj, newEndTimeObj     // Za (c.start_time < newStartTimeObj AND c.end_time > newEndTimeObj) -> (c.start_time < newEndTimeObj AND c.end_time > newStartTimeObj)
+                                       // Redoslijed parametara mora odgovarati upitnicima u SQL-u.
+                                       // Parametri za uvjete preklapanja:
+                                       // 1. Postojeća završava NAKON što nova počne (c.end_time >= newStartTime)
+                                       // 2. Postojeća počinje PRIJE nego nova završi (c.start_time <= newEndTime)
+                                       // Logika preklapanja je: (StartA <= EndB) and (EndA >= StartB)
+                                       // U našem slučaju (c.start_time <= newEndTimeObj) AND (c.end_time >= newStartTimeObj)
+                                       // Ovo pokriva sve slučajeve preklapanja. Pojednostavnimo SQL.
   ]);
+
+  const simplifiedSql = `
+    SELECT c.id, c.name, c.start_time, c.end_time 
+    FROM campaigns c
+    JOIN campaign_tvs ct ON c.id = ct.campaign_id
+    WHERE ct.tv_id = ? 
+      AND c.id != ?
+      AND (c.start_time < ? AND c.end_time > ?)
+    LIMIT 1;
+  `;
+  // Parametri za simplifiedSql: tvId, newCampaign.id, newEndTimeObj, newStartTimeObj
+
+  const conflictingCampaigns = await query<any>(simplifiedSql, [
+    tvId,
+    newCampaign.id,
+    newEndTimeObj,    // existing.start_time < newCampaign.endTime
+    newStartTimeObj   // existing.end_time > newCampaign.startTime
+  ]);
+
 
   if (conflictingCampaigns.length > 0) {
     const conflictData = mapToCamelCase(conflictingCampaigns[0]);
+    // Vraćamo Campaign objekt s ISO stringovima za datume
     return {
         id: conflictData.id,
         name: conflictData.name,
@@ -279,7 +347,7 @@ export async function getUserByUsernameWithPassword(username: string): Promise<U
   if (rows.length === 0) {
     return null;
   }
-  const userRow = rows[0] as any;
+  const userRow = rows[0] as any; // mapToCamelCase ovdje nije potreban jer su imena stupaca već dobra
   return {
     id: userRow.id,
     username: userRow.username,
@@ -293,10 +361,11 @@ export async function getUserById(userId: string): Promise<User | null> {
   if (rows.length === 0) {
     return null;
   }
-   const userRow = rows[0] as any;
+   const userRow = rows[0] as any; // mapToCamelCase ovdje nije potreban
   return {
     id: userRow.id,
     username: userRow.username,
     role: userRow.role,
   } as User;
 }
+
