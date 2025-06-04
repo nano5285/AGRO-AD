@@ -25,17 +25,12 @@ jobs:
 
       - name: npm install and build
         run: |
-          # Promijeni radni direktorij u Next.js aplikacijski direktorij
-          cd AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27
+          # Next.js projekt se pretpostavlja da je u korijenu repozitorija
           npm install # Instaliraj sve ovisnosti, uključujući devDependencies za build
           npm run build # Ova komanda stvara optimizirani .next direktorij
-          # Nema potrebe za cd .. ovdje jer sljedeći korak također radi cd.
 
       - name: Prepare artifact for deployment
         run: |
-          # Promijeni radni direktorij u Next.js aplikacijski direktorij (ponovno, za svaki slučaj)
-          cd AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27
-
           # Kreiraj čisti direktorij koji će sadržavati samo potrebne produkcijske datoteke
           mkdir release_artifact
 
@@ -53,14 +48,14 @@ jobs:
           # Instaliraj samo produkcijske ovisnosti izravno u direktorij artefakta.
           cd release_artifact
           npm install --production
-          cd .. # Vrati se u direktorij AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27
+          cd .. # Vrati se u korijen repozitorija
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          # Putanja do pripremljenog direktorija artefakta unutar Next.js projektnog direktorija
-          path: AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27/release_artifact
+          # Putanja do pripremljenog direktorija artefakta u korijenu repozitorija
+          path: release_artifact
 
   deploy:
     runs-on: ubuntu-latest
