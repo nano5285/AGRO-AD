@@ -25,7 +25,7 @@ import {
 } from '@/lib/data';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, PlusCircle, Trash2, Edit3, Tv as TvIconLucide, Image as ImageIcon, FileVideo, Clapperboard, Save, Info, UploadCloud, RefreshCw } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid as isDateValid } from 'date-fns';
 import { hr } from 'date-fns/locale';
 import Image from 'next/image';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -81,18 +81,22 @@ export default function CampaignDetailPage() {
         const adsForForm = fetchedCampaign.ads.map(ad => ({
           ...ad, 
           file: ad.url, 
-          startTime: ad.startTime ? format(parseISO(ad.startTime), "yyyy-MM-dd'T'HH:mm") : '',
-          endTime: ad.endTime ? format(parseISO(ad.endTime), "yyyy-MM-dd'T'HH:mm") : '',
+          startTime: ad.startTime && isDateValid(parseISO(ad.startTime)) ? format(parseISO(ad.startTime), "yyyy-MM-dd'T'HH:mm") : '',
+          endTime: ad.endTime && isDateValid(parseISO(ad.endTime)) ? format(parseISO(ad.endTime), "yyyy-MM-dd'T'HH:mm") : '',
         }));
-
-        form.reset({
+        
+        const resetData = {
           name: fetchedCampaign.name,
-          startTime: format(parseISO(fetchedCampaign.startTime), "yyyy-MM-dd'T'HH:mm"),
-          endTime: format(parseISO(fetchedCampaign.endTime), "yyyy-MM-dd'T'HH:mm"),
+          startTime: isDateValid(parseISO(fetchedCampaign.startTime)) ? format(parseISO(fetchedCampaign.startTime), "yyyy-MM-dd'T'HH:mm") : '',
+          endTime: isDateValid(parseISO(fetchedCampaign.endTime)) ? format(parseISO(fetchedCampaign.endTime), "yyyy-MM-dd'T'HH:mm") : '',
           ads: adsForForm,
           assignedTvIds: fetchedCampaign.assignedTvIds || []
-        });
-        replaceAds(adsForForm); // Make sure this is also called to update useFieldArray's internal state
+        };
+        console.log('Reseting form with data:', resetData);
+        form.reset(resetData);
+        // `replaceAds` is important to correctly update the useFieldArray internal state, 
+        // especially if `form.reset` doesn't fully re-initialize it in all scenarios.
+        replaceAds(adsForForm); 
 
       } else {
         setCampaign(null);
@@ -113,7 +117,12 @@ export default function CampaignDetailPage() {
 
 
   const onSubmitCampaignDetails = async (data: CampaignEditPageFormData) => { 
-    if (!campaign) return;
+    console.log('onSubmitCampaignDetails CALLED with data:', data);
+    if (!campaign) {
+      console.log('onSubmitCampaignDetails: No campaign, returning.');
+      toast({ title: "Greška: Kampanja nije učitana.", variant: "destructive" });
+      return;
+    }
     setIsSubmittingCampaign(true);
     try {
       const campaignToSave: Pick<Campaign, 'id' | 'name' | 'startTime' | 'endTime'> = {
@@ -122,10 +131,7 @@ export default function CampaignDetailPage() {
         startTime: new Date(data.startTime).toISOString(),
         endTime: new Date(data.endTime).toISOString(),
       };
-      // The saveCampaignDetails (updateCampaign) function returns Campaign | undefined.
-      // It returns undefined if no rows were affected (data was the same) but no error occurred.
-      // It returns Campaign object if rows were affected.
-      // It throws an error if something went wrong with the DB operation.
+      
       await saveCampaignDetails(campaignToSave); 
       toast({ title: "Postavke kampanje spremljene!", description: "Podaci su uspješno ažurirani."});
       
@@ -319,12 +325,25 @@ export default function CampaignDetailPage() {
                   )} />
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" size="sm" disabled={isSubmittingCampaign || !form.formState.isDirty}><Save className="mr-2 h-4 w-4"/> {isSubmittingCampaign ? "Spremanje..." : "Spremi detalje"}</Button>
+                  <Button 
+                    type="submit" 
+                    size="sm" 
+                    disabled={isSubmittingCampaign || !form.formState.isDirty}
+                    onClick={() => {
+                        console.log('--- Spremi detalje button CLICKED ---');
+                        console.log('isSubmittingCampaign:', isSubmittingCampaign);
+                        console.log('form.formState.isDirty:', form.formState.isDirty);
+                        console.log('form.formState.isValid:', form.formState.isValid);
+                        console.log('form.formState.errors:', form.formState.errors);
+                        console.log('form.getValues():', form.getValues());
+                      }}
+                  >
+                    <Save className="mr-2 h-4 w-4"/> {isSubmittingCampaign ? "Spremanje..." : "Spremi detalje"}
+                  </Button>
                 </CardFooter>
               </Card>
             </form>
 
-            {/* TV Assignment Section - Not a separate form submit, uses a button onClick */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><TvIconLucide className="mr-2 h-5 w-5" /> Dodijeli TV prijemnicima</CardTitle>
@@ -396,8 +415,8 @@ export default function CampaignDetailPage() {
               <AdCreator 
                 campaignId={campaignId} 
                 onAdAdded={onAddAd} 
-                campaignStartTime={form.getValues("startTime") || (campaign?.startTime ? format(parseISO(campaign.startTime), "yyyy-MM-dd'T'HH:mm") : "")} 
-                campaignEndTime={form.getValues("endTime") || (campaign?.endTime ? format(parseISO(campaign.endTime), "yyyy-MM-dd'T'HH:mm") : "")}
+                campaignStartTime={form.getValues("startTime") || (campaign?.startTime && isDateValid(parseISO(campaign.startTime)) ? format(parseISO(campaign.startTime), "yyyy-MM-dd'T'HH:mm") : "")} 
+                campaignEndTime={form.getValues("endTime") || (campaign?.endTime && isDateValid(parseISO(campaign.endTime)) ? format(parseISO(campaign.endTime), "yyyy-MM-dd'T'HH:mm") : "")}
               />
               
               <Separator className="my-6" />
@@ -436,7 +455,7 @@ export default function CampaignDetailPage() {
                         { form.watch(`ads.${index}.type`) === 'video' &&
                           <div className="text-xs text-muted-foreground">Video pregled nije dostupan. URL: <a href={form.watch(`ads.${index}.file`) as string} target="_blank" rel="noopener noreferrer" className="text-primary underline">Poveznica</a></div>
                         }
-                        {(form.watch(`ads.${index}.startTime`) && form.watch(`ads.${index}.endTime`) && form.watch(`ads.${index}.startTime`) !== '' && form.watch(`ads.${index}.endTime`) !== '') && (
+                        {(form.watch(`ads.${index}.startTime`) && form.watch(`ads.${index}.endTime`) && form.watch(`ads.${index}.startTime`) !== '' && form.watch(`ads.${index}.endTime`) !== '' && isDateValid(parseISO(form.watch(`ads.${index}.startTime`) as string)) && isDateValid(parseISO(form.watch(`ads.${index}.endTime`) as string))) && (
                             <p className="text-xs text-muted-foreground">
                                 Oglas aktivan: {format(parseISO(form.watch(`ads.${index}.startTime`) as string), "PPp", { locale: hr })} - {format(parseISO(form.watch(`ads.${index}.endTime`) as string), "PPp", { locale: hr })}
                             </p>
@@ -482,10 +501,10 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
   const onSubmitAd = async (data: AdMediaFormData) => {
     setIsSubmittingAd(true);
     const finalStartTime = (data.startTime === '' || data.startTime === undefined) 
-        ? campaignStartTime // Use already formatted campaignStartTime
+        ? campaignStartTime 
         : data.startTime;
     const finalEndTime = (data.endTime === '' || data.endTime === undefined)
-        ? campaignEndTime   // Use already formatted campaignEndTime
+        ? campaignEndTime   
         : data.endTime;
     
     const dataToSubmit = { ...data, startTime: finalStartTime, endTime: finalEndTime };
@@ -499,15 +518,14 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         setSelectedFileName(null);
     } catch (error) {
         console.error("Greška pri slanju forme za oglas:", error);
-        // Toast should be handled by onAdAdded or its caller
     } finally {
         setIsSubmittingAd(false);
     }
   };
   
   const adType = adForm.watch("type");
-  const formattedCampaignStartTime = campaignStartTime; // Already formatted "yyyy-MM-dd'T'HH:mm" or ""
-  const formattedCampaignEndTime = campaignEndTime;     // Already formatted "yyyy-MM-dd'T'HH:mm" or ""
+  const formattedCampaignStartTime = campaignStartTime; 
+  const formattedCampaignEndTime = campaignEndTime;     
 
 
   return (
@@ -533,7 +551,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         <FormField
           control={adForm.control}
           name="file"
-          render={({ field: { onChange, value, name, ref, ...rest } }) => ( // Added name and ref
+          render={({ field: { onChange, value, name, ref, ...rest } }) => ( 
             <FormItem>
               <FormLabel>Medijska datoteka</FormLabel>
               <FormControl>
@@ -541,16 +559,15 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                   <Input
                     id="file-upload"
                     type="file"
-                    className="hidden" // Visually hide the default input
+                    className="hidden" 
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      onChange(file); // Update react-hook-form state
+                      onChange(file); 
                       setSelectedFileName(file ? file.name : null);
                     }}
-                    ref={ref} // Pass ref for react-hook-form
-                    {...rest} // Pass other props like onBlur, disabled etc.
+                    ref={ref} 
+                    {...rest} 
                   />
-                  {/* Custom styled button-like label */}
                   <label
                     htmlFor="file-upload"
                     className="flex items-center justify-center w-full px-4 py-2 border border-input rounded-md shadow-sm text-sm font-medium text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer"
@@ -573,7 +590,11 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
             </FormItem>
           )} />
         )}
-        <p className="text-xs text-muted-foreground flex items-center"><Info size={14} className="mr-1 text-primary" /> Vremena početka/završetka oglasa zadano su trajanje kampanje ako nisu navedena. Trajanje kampanje: {campaignStartTime ? format(parseISO(campaignStartTime), "P p", { locale: hr }) : 'N/A'} do {campaignEndTime ? format(parseISO(campaignEndTime), "P p", { locale: hr }) : 'N/A'}.</p>
+        <p className="text-xs text-muted-foreground flex items-center"><Info size={14} className="mr-1 text-primary" /> 
+            Vremena početka/završetka oglasa zadano su trajanje kampanje ako nisu navedena. 
+            Trajanje kampanje: 
+            {(campaignStartTime && isDateValid(parseISO(campaignStartTime))) ? format(parseISO(campaignStartTime), "P p", { locale: hr }) : 'N/A'} do {(campaignEndTime && isDateValid(parseISO(campaignEndTime))) ? format(parseISO(campaignEndTime), "P p", { locale: hr }) : 'N/A'}.
+        </p>
         <div className="grid grid-cols-2 gap-4">
             <FormField control={adForm.control} name="startTime" render={({ field }) => (
             <FormItem><FormLabel>Vrijeme početka oglasa (nije obavezno)</FormLabel>
@@ -593,5 +614,4 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
     </Form>
   );
 }
-
     
