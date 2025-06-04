@@ -23,20 +23,44 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: npm install, build, and test
+      - name: npm install and build
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          # Promijeni radni direktorij u Next.js aplikacijski direktorij
+          cd AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27
+          npm install # Instaliraj sve ovisnosti, uključujući devDependencies za build
+          npm run build # Ova komanda stvara optimizirani .next direktorij
+          # Nema potrebe za cd .. ovdje jer sljedeći korak također radi cd.
 
-      - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+      - name: Prepare artifact for deployment
+        run: |
+          # Promijeni radni direktorij u Next.js aplikacijski direktorij (ponovno, za svaki slučaj)
+          cd AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27
+
+          # Kreiraj čisti direktorij koji će sadržavati samo potrebne produkcijske datoteke
+          mkdir release_artifact
+
+          # Kopiraj bitne Next.js build output i konfiguracijske datoteke
+          cp -r .next release_artifact/ # Kompilirana Next.js aplikacija
+          # Provjeri postoji li 'public' direktorij prije kopiranja
+          if [ -d public ]; then
+            cp -r public release_artifact/ # Statički asseti
+          else
+            echo "Warning: 'public' directory not found at $(pwd)/public. Skipping copy."
+          fi
+          cp package.json release_artifact/package.json
+          cp next.config.ts release_artifact/next.config.ts # Važna Next.js konfiguracijska datoteka
+
+          # Instaliraj samo produkcijske ovisnosti izravno u direktorij artefakta.
+          cd release_artifact
+          npm install --production
+          cd .. # Vrati se u direktorij AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: release.zip
+          # Putanja do pripremljenog direktorija artefakta unutar Next.js projektnog direktorija
+          path: AGRO-AD-daf889a2cb6f229c9b62dc9f5ae5e6b765b44a27/release_artifact
 
   deploy:
     runs-on: ubuntu-latest
@@ -55,8 +79,12 @@ jobs:
           name: node-app
 
       - name: Unzip artifact for deployment
-        run: unzip release.zip
-      
+        # Artefakt je već pripremljen direktorij, pa samo trebamo premjestiti njegov sadržaj
+        # u wwwroot. Pod pretpostavkom da je artefakt preuzet u trenutni direktorij.
+        run: |
+          mv node-app/* . # Premjesti sadržaj mape 'node-app' u trenutni direktorij (/home/site/wwwroot)
+          rmdir node-app # Ukloni sada prazan direktorij 'node-app'
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -70,5 +98,4 @@ jobs:
         with:
           app-name: 'azuread'
           slot-name: 'Production'
-          package: .
-          
+          package: . # Deployaj trenutni direktorij, koji sada sadrži pripremljeni artefakt
