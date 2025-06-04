@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -29,24 +30,33 @@ export default function NewCampaignPage() {
     },
   });
 
-  function onSubmit(data: CampaignFormData) {
+  async function onSubmit(data: CampaignFormData) { // Dodan async
     try {
-      const newCampaign = addCampaign({
+      const newCampaign = await addCampaign({ // Dodan await
         name: data.name,
         startTime: new Date(data.startTime).toISOString(),
         endTime: new Date(data.endTime).toISOString(),
       });
-      toast({
-        title: 'Kampanja uspješno stvorena!',
-        description: `Kampanja "${newCampaign.name}" je dodana. Sada možete dodati oglase i dodijeliti je TV prijemnicima.`,
-      });
-      router.push(`/admin/campaigns/${newCampaign.id}`);
+      if (newCampaign && newCampaign.id) {
+        toast({
+          title: 'Kampanja uspješno stvorena!',
+          description: `Kampanja "${newCampaign.name}" je dodana. Sada možete dodati oglase i dodijeliti je TV prijemnicima.`,
+        });
+        router.push(`/admin/campaigns/${newCampaign.id}`);
+      } else {
+        toast({
+          title: 'Greška pri stvaranju kampanje',
+          description: 'Nije bilo moguće dobiti ID nove kampanje.',
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
       toast({
         title: 'Greška pri stvaranju kampanje',
         description: error instanceof Error ? error.message : 'Dogodila se neočekivana pogreška.',
         variant: 'destructive',
       });
+      console.error("Greška pri stvaranju kampanje:", error);
     }
   }
 

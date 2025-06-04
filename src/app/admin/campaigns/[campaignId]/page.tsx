@@ -32,8 +32,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Removed local CampaignEditFormData interface, using imported CampaignEditPageFormData
-
 export default function CampaignDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -46,8 +44,8 @@ export default function CampaignDetailPage() {
   const [isSubmittingCampaign, setIsSubmittingCampaign] = useState(false);
   const [isSubmittingTVs, setIsSubmittingTVs] = useState(false);
   
-  const form = useForm<CampaignEditPageFormData>({ // Use imported CampaignEditPageFormData
-    resolver: zodResolver(campaignEditPageSchema), // Use the new schema
+  const form = useForm<CampaignEditPageFormData>({ 
+    resolver: zodResolver(campaignEditPageSchema), 
     defaultValues: {
       name: '',
       startTime: '',
@@ -63,6 +61,12 @@ export default function CampaignDetailPage() {
   });
 
   const loadCampaignData = useCallback(async (showLoading = true) => {
+    if (!campaignId || campaignId === 'undefined') {
+        toast({ title: "Nevažeći ID kampanje", variant: "destructive" });
+        router.push('/admin/campaigns');
+        setIsLoading(false);
+        return;
+    }
     if(showLoading) setIsLoading(true);
     try {
       const [fetchedCampaign, fetchedTVs] = await Promise.all([
@@ -78,27 +82,30 @@ export default function CampaignDetailPage() {
           startTime: format(parseISO(fetchedCampaign.startTime), "yyyy-MM-dd'T'HH:mm"),
           endTime: format(parseISO(fetchedCampaign.endTime), "yyyy-MM-dd'T'HH:mm"),
           ads: fetchedCampaign.ads.map(ad => ({
-            ...ad, // spread existing ad properties like id, url, dataAIHint
-            file: ad.url, // file for react-hook-form can be the URL for existing ads
+            ...ad, 
+            file: ad.url, 
             startTime: ad.startTime ? format(parseISO(ad.startTime), "yyyy-MM-dd'T'HH:mm") : '',
             endTime: ad.endTime ? format(parseISO(ad.endTime), "yyyy-MM-dd'T'HH:mm") : '',
           })),
           assignedTvIds: fetchedCampaign.assignedTvIds || []
         });
+        // replaceAds mora dobiti podatke koji odgovaraju AdMediaFormData, uključujući 'file' polje
         replaceAds(fetchedCampaign.ads.map(ad => ({
             ...ad,
-            file: ad.url, 
+            file: ad.url, // Ovo je ključno za useFieldArray da ima 'file' polje
             startTime: ad.startTime ? format(parseISO(ad.startTime), "yyyy-MM-dd'T'HH:mm") : '',
             endTime: ad.endTime ? format(parseISO(ad.endTime), "yyyy-MM-dd'T'HH:mm") : '',
         })));
 
       } else {
+        setCampaign(null); // Eksplicitno postavi na null ako nije pronađena
         toast({ title: "Kampanja nije pronađena", variant: "destructive" });
-        router.push('/admin/campaigns');
+        // Ne preusmjeravaj odmah, pusti da se prikaže poruka "Kampanja nije pronađena"
       }
     } catch (error) {
       console.error("Greška pri dohvaćanju podataka kampanje:", error);
       toast({ title: "Greška pri dohvaćanju podataka", variant: "destructive" });
+      setCampaign(null);
     } finally {
       if(showLoading) setIsLoading(false);
     }
@@ -109,7 +116,7 @@ export default function CampaignDetailPage() {
   }, [loadCampaignData]);
 
 
-  const onSubmitCampaignDetails = async (data: CampaignFormData) => { // data here is CampaignFormData, which is fine as we only use core fields
+  const onSubmitCampaignDetails = async (data: CampaignFormData) => { 
     if (!campaign) return;
     setIsSubmittingCampaign(true);
     try {
@@ -139,11 +146,10 @@ export default function CampaignDetailPage() {
     if (!campaign) return;
     
     const fileName = data.file instanceof File ? data.file.name : (typeof data.file === 'string' ? data.file.substring(data.file.lastIndexOf('/')+1) : 'nepoznata_datoteka');
-    // Determine placeholder or existing URL
-    let adUrl = data.url; // Use existing URL if available (e.g., editing an ad not changing file)
-    if (data.file instanceof File) { // If a new file is selected, use placeholder
+    let adUrl = data.url; 
+    if (data.file instanceof File) { 
       adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png`;
-    } else if (!adUrl) { // Fallback if no file and no existing URL
+    } else if (!adUrl) { 
       adUrl = data.type === 'video' ? 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4' : `https://placehold.co/300x200.png`;
     }
     
@@ -155,16 +161,15 @@ export default function CampaignDetailPage() {
       durationSeconds: data.durationSeconds,
       startTime: data.startTime && data.startTime !== '' ? new Date(data.startTime).toISOString() : undefined,
       endTime: data.endTime && data.endTime !== '' ? new Date(data.endTime).toISOString() : undefined,
-      dataAIHint: data.file instanceof File ? data.name.substring(0,50) : data.dataAIHint, // Use name for new file AI hint
+      dataAIHint: data.file instanceof File ? data.name.substring(0,50) : data.dataAIHint, 
     };
 
     try {
       const newAd = await saveAd(campaign.id, newAdData);
       if (newAd) {
-        // appendAd needs data matching AdMediaFormData (which adMediaSchema produces)
         const adToAppend: AdMediaFormData = {
           ...newAd,
-          file: newAd.url, // for form field
+          file: newAd.url, 
           startTime: newAd.startTime ? format(parseISO(newAd.startTime), "yyyy-MM-dd'T'HH:mm") : '',
           endTime: newAd.endTime ? format(parseISO(newAd.endTime), "yyyy-MM-dd'T'HH:mm") : '',
         };
@@ -181,7 +186,7 @@ export default function CampaignDetailPage() {
   };
   
   const onDeleteAd = async (adIndex: number, adId: string) => {
-    if (!campaign || !adId) { // Ensure adId is present
+    if (!campaign || !adId) { 
         toast({ title: "Greška: ID oglasa nedostaje", variant: "destructive"});
         return;
     }
@@ -200,7 +205,7 @@ export default function CampaignDetailPage() {
     }
   };
 
-  const onAssignTVs = async (data: { assignedTvIds: string[] }) => { // data here has only assignedTvIds
+  const onAssignTVs = async (data: { assignedTvIds: string[] }) => { 
     if (!campaign) return;
     setIsSubmittingTVs(true);
 
@@ -216,7 +221,7 @@ export default function CampaignDetailPage() {
       const originalAssigned = campaign.assignedTvIds || [];
 
       for (const tvId of currentAssignedInForm) {
-        if (!originalAssigned.includes(tvId)) { // Provjeri samo za nove dodjele
+        if (!originalAssigned.includes(tvId)) { 
           const conflictingCampaign = await hasConflict(tvId, tempCampaignForCheck);
           if (conflictingCampaign) {
             const tvDetails = await getTVById(tvId);
@@ -227,7 +232,6 @@ export default function CampaignDetailPage() {
               duration: 7000,
             });
             conflictFound = true;
-            // Vrati checkbox na staro stanje za taj TV ID
             form.setValue("assignedTvIds", currentAssignedInForm.filter(id => id !== tvId)); 
             break; 
           }
@@ -239,7 +243,6 @@ export default function CampaignDetailPage() {
         return;
       }
       
-      // Koristi vrijednosti iz forme za ažuriranje
       const finalAssignedTvIds = form.getValues("assignedTvIds") || [];
       const toAdd = finalAssignedTvIds.filter(id => !originalAssigned.includes(id));
       const toRemove = originalAssigned.filter(id => !finalAssignedTvIds.includes(id));
@@ -248,7 +251,6 @@ export default function CampaignDetailPage() {
       await Promise.all(toRemove.map(tvId => unlinkCampaignFromTV(campaign.id, tvId)));
       
       await loadCampaignData(false); 
-      // form.setValue("assignedTvIds", finalAssignedTvIds); // No longer needed, loadCampaignData will reset
       toast({ title: "Dodjele TV prijemnika ažurirane." });
 
     } catch (error) {
@@ -261,12 +263,21 @@ export default function CampaignDetailPage() {
 
 
   if (isLoading) return <div className="flex justify-center items-center h-64">Učitavanje detalja kampanje...</div>;
-  if (!campaign) return <div className="text-center py-10">Kampanja nije pronađena.</div>;
+  if (!campaign && !isLoading) return ( // Provjeri i !isLoading da se poruka ne prikaže prerano
+      <div className="text-center py-10">
+          <p className="text-xl font-semibold">Kampanja nije pronađena.</p>
+          <p className="text-muted-foreground">Provjerite ID kampanje ili se vratite na popis.</p>
+          <Button variant="outline" asChild className="mt-4">
+              <Link href="/admin/campaigns"><ArrowLeft className="mr-2 h-4 w-4" /> Natrag na kampanje</Link>
+          </Button>
+      </div>
+  );
+  if (!campaign) return null; // Ako nije isLoading i campaign je još uvijek null, ne prikazuj ništa dok se ne obradi
 
   return (
     <>
       <PageHeader
-        title={`Upravljanje kampanjom: ${form.watch("name") || campaign.name}`} // Watch form name
+        title={`Upravljanje kampanjom: ${form.watch("name") || campaign.name}`} 
         description="Uredite detalje, oglase i dodjele TV prijemnika za ovu kampanju."
         actions={
           <>
@@ -283,7 +294,6 @@ export default function CampaignDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Form {...form}>
-            {/* Campaign Details Form */}
             <form onSubmit={form.handleSubmit(onSubmitCampaignDetails)}>
               <Card>
                 <CardHeader>
@@ -318,7 +328,6 @@ export default function CampaignDetailPage() {
               </Card>
             </form>
 
-            {/* Assign TVs Form */}
              <form onSubmit={form.handleSubmit(() => onAssignTVs({ assignedTvIds: form.getValues("assignedTvIds") || [] }))}>
               <Card>
                 <CardHeader>
