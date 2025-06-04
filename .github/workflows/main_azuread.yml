@@ -23,33 +23,20 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: npm install and build
+      - name: npm install, build, and test
         run: |
-          npm install # Install all dependencies, including devDependencies for the build
-          npm run build # This command creates the optimized .next directory
+          npm install
+          npm run build --if-present
+          npm run test --if-present
 
-      - name: Prepare artifact for deployment
-        run: |
-          # Create a clean directory that will contain only the necessary production files
-          mkdir release_artifact
-
-          # Copy essential Next.js build output and configuration files
-          cp -r .next release_artifact/ # The compiled Next.js application
-          cp -r public release_artifact/ # Static assets
-          cp package.json release_artifact/package.json
-          cp next.config.ts release_artifact/next.config.ts # Important Next.js configuration
-
-          # Install only production dependencies directly into the artifact directory.
-          # This ensures node_modules are correctly placed and avoids symlink issues.
-          cd release_artifact
-          npm install --production
-          cd ..
+      - name: Zip artifact for deployment
+        run: zip release.zip ./* -r
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: release_artifact # Upload the prepared artifact directory
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -68,12 +55,8 @@ jobs:
           name: node-app
 
       - name: Unzip artifact for deployment
-        # The artifact is already a prepared directory, so we just need to move its contents
-        # to the wwwroot. Assuming the artifact is downloaded to the current directory.
-        run: |
-          mv node-app/* . # Move contents of 'node-app' folder to current directory (/home/site/wwwroot)
-          rmdir node-app # Remove the now empty 'node-app' directory
-
+        run: unzip release.zip
+      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -87,4 +70,5 @@ jobs:
         with:
           app-name: 'azuread'
           slot-name: 'Production'
-          package: . # Deploy the current directory, which now contains the prepared artifact
+          package: .
+          
