@@ -92,7 +92,7 @@ export default function CampaignDetailPage() {
           ads: adsForForm,
           assignedTvIds: fetchedCampaign.assignedTvIds || []
         });
-        replaceAds(adsForForm);
+        replaceAds(adsForForm); // Make sure this is also called to update useFieldArray's internal state
 
       } else {
         setCampaign(null);
@@ -122,19 +122,18 @@ export default function CampaignDetailPage() {
         startTime: new Date(data.startTime).toISOString(),
         endTime: new Date(data.endTime).toISOString(),
       };
-      const result = await saveCampaignDetails(campaignToSave);
-      if (result) {
-        toast({ title: "Detalji kampanje ažurirani!" });
-      } else {
-        // Ovo se može dogoditi ako podaci nisu promijenjeni u bazi.
-        // Možemo prikazati neutralniju poruku ili istu kao za uspjeh.
-        toast({ title: "Postavke kampanje spremljene.", description: "Nisu detektirane promjene ili su podaci već ažurni."});
-      }
+      // The saveCampaignDetails (updateCampaign) function returns Campaign | undefined.
+      // It returns undefined if no rows were affected (data was the same) but no error occurred.
+      // It returns Campaign object if rows were affected.
+      // It throws an error if something went wrong with the DB operation.
+      await saveCampaignDetails(campaignToSave); 
+      toast({ title: "Postavke kampanje spremljene!", description: "Podaci su uspješno ažurirani."});
+      
       await loadCampaignData(false); 
-      router.refresh(); // Osvježi podatke sa servera
+      router.refresh(); 
     } catch (error) {
       console.error("Greška kod spremanja detalja kampanje:", error);
-      toast({ title: "Greška kod spremanja detalja kampanje", variant: "destructive" });
+      toast({ title: "Greška kod spremanja detalja kampanje", variant: "destructive", description: error instanceof Error ? error.message : "Pokušajte ponovno." });
     } finally {
       setIsSubmittingCampaign(false);
     }
@@ -225,7 +224,7 @@ export default function CampaignDetailPage() {
               duration: 7000,
             });
             conflictFound = true;
-            form.setValue("assignedTvIds", originalAssigned); // Vrati na originalno stanje u formi
+            form.setValue("assignedTvIds", originalAssigned); 
             break; 
           }
         }
@@ -397,8 +396,8 @@ export default function CampaignDetailPage() {
               <AdCreator 
                 campaignId={campaignId} 
                 onAdAdded={onAddAd} 
-                campaignStartTime={form.getValues("startTime") || campaign.startTime} 
-                campaignEndTime={form.getValues("endTime") || campaign.endTime} 
+                campaignStartTime={form.getValues("startTime") || (campaign?.startTime ? format(parseISO(campaign.startTime), "yyyy-MM-dd'T'HH:mm") : "")} 
+                campaignEndTime={form.getValues("endTime") || (campaign?.endTime ? format(parseISO(campaign.endTime), "yyyy-MM-dd'T'HH:mm") : "")}
               />
               
               <Separator className="my-6" />
@@ -420,7 +419,7 @@ export default function CampaignDetailPage() {
                             }
                           </CardDescription>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => onDeleteAd(form.getValues(`ads.${index}.id`) || '')}>
+                        <Button variant="ghost" size="icon" onClick={() => onDeleteAd(form.getValues(`ads.${index}.id`) || '')} disabled={!form.getValues(`ads.${index}.id`)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </CardHeader>
@@ -483,10 +482,10 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
   const onSubmitAd = async (data: AdMediaFormData) => {
     setIsSubmittingAd(true);
     const finalStartTime = (data.startTime === '' || data.startTime === undefined) 
-        ? format(parseISO(campaignStartTime), "yyyy-MM-dd'T'HH:mm") 
+        ? campaignStartTime // Use already formatted campaignStartTime
         : data.startTime;
     const finalEndTime = (data.endTime === '' || data.endTime === undefined)
-        ? format(parseISO(campaignEndTime), "yyyy-MM-dd'T'HH:mm")
+        ? campaignEndTime   // Use already formatted campaignEndTime
         : data.endTime;
     
     const dataToSubmit = { ...data, startTime: finalStartTime, endTime: finalEndTime };
@@ -500,14 +499,15 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         setSelectedFileName(null);
     } catch (error) {
         console.error("Greška pri slanju forme za oglas:", error);
+        // Toast should be handled by onAdAdded or its caller
     } finally {
         setIsSubmittingAd(false);
     }
   };
   
   const adType = adForm.watch("type");
-  const formattedCampaignStartTime = campaignStartTime ? format(parseISO(campaignStartTime), "yyyy-MM-dd'T'HH:mm") : "";
-  const formattedCampaignEndTime = campaignEndTime ? format(parseISO(campaignEndTime), "yyyy-MM-dd'T'HH:mm") : "";
+  const formattedCampaignStartTime = campaignStartTime; // Already formatted "yyyy-MM-dd'T'HH:mm" or ""
+  const formattedCampaignEndTime = campaignEndTime;     // Already formatted "yyyy-MM-dd'T'HH:mm" or ""
 
 
   return (
@@ -533,7 +533,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         <FormField
           control={adForm.control}
           name="file"
-          render={({ field: { onChange, value, name, ref, ...rest } }) => (
+          render={({ field: { onChange, value, name, ref, ...rest } }) => ( // Added name and ref
             <FormItem>
               <FormLabel>Medijska datoteka</FormLabel>
               <FormControl>
@@ -541,15 +541,16 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                   <Input
                     id="file-upload"
                     type="file"
-                    className="hidden"
+                    className="hidden" // Visually hide the default input
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      onChange(file); 
+                      onChange(file); // Update react-hook-form state
                       setSelectedFileName(file ? file.name : null);
                     }}
-                    ref={ref} 
-                    {...rest} 
+                    ref={ref} // Pass ref for react-hook-form
+                    {...rest} // Pass other props like onBlur, disabled etc.
                   />
+                  {/* Custom styled button-like label */}
                   <label
                     htmlFor="file-upload"
                     className="flex items-center justify-center w-full px-4 py-2 border border-input rounded-md shadow-sm text-sm font-medium text-muted-foreground bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer"
@@ -592,7 +593,5 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
     </Form>
   );
 }
-
-    
 
     
