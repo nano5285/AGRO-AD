@@ -113,7 +113,7 @@ export default function CampaignDetailPage() {
           ads: adsForForm,
           assignedTvIds: fetchedCampaign.assignedTvIds || []
         };
-        console.log('Reseting form with data:', resetData);
+        // console.log('Reseting form with data:', resetData);
         form.reset(resetData);
         replaceAds(adsForForm); 
 
@@ -136,7 +136,7 @@ export default function CampaignDetailPage() {
 
 
   const onSubmitCampaignDetails = async (data: CampaignEditPageFormData) => { 
-    console.log('onSubmitCampaignDetails CALLED with data:', data);
+    // console.log('onSubmitCampaignDetails CALLED with data:', data);
     if (!campaign) {
       toast({ title: "Greška: Kampanja nije učitana.", variant: "destructive" });
       return;
@@ -164,34 +164,30 @@ export default function CampaignDetailPage() {
   };
 
   const handleCampaignDetailsSubmitAttempt = async () => {
-    console.log('--- Spremi detalje button CLICKED (Attempt) ---');
+    // console.log('--- Spremi detalje button CLICKED (Attempt) ---');
     const currentValues = form.getValues();
-    console.log('Current form values for manual Zod parse:', currentValues);
+    // console.log('Current form values for manual Zod parse:', currentValues);
     
     try {
       campaignEditPageSchema.parse(currentValues); // Try to parse
-      console.log('Zod schema validation PASSED manually.');
-      // If it passes, then call the actual submit handler
-      // Need to ensure handleSubmit is called correctly.
-      // We can't directly call form.handleSubmit(onSubmitCampaignDetails)() if it returns a promise that react-hook-form handles internally for its own state.
-      // Instead, we trigger the form's native submit or rely on react-hook-form's mechanism.
-      // For now, if manual parse passes, we'll assume the form.handleSubmit should work if button type was submit.
-      // Let's call onSubmitCampaignDetails directly if manual parse passes.
+      // console.log('Zod schema validation PASSED manually.');
       await onSubmitCampaignDetails(currentValues);
     } catch (error) {
-      console.error('Zod schema validation FAILED manually:', JSON.stringify(error, null, 2));
+      // console.error('Zod schema validation FAILED manually:', JSON.stringify(error, null, 2));
        toast({
         title: "Greška u validaciji forme",
-        description: "Provjerite unesene podatke. Detalji su u konzoli.",
+        description: "Provjerite unesene podatke. Neka polja možda nisu ispravna.",
         variant: "destructive",
         duration: 7000,
       });
+      // Log details of Zod error for easier debugging if needed in the future
+      if (error instanceof z.ZodError) {
+        console.error("Zod validation errors:", JSON.stringify(error.flatten().fieldErrors, null, 2));
+      }
     }
-
-    // These logs are helpful regardless of manual parse outcome
-    console.log('form.formState.isDirty:', form.formState.isDirty);
-    console.log('form.formState.isValid (after attempt):', form.formState.isValid); // RHF's perspective
-    console.log('form.formState.errors (JSON after attempt):', JSON.stringify(form.formState.errors, null, 2));
+    // console.log('form.formState.isDirty:', form.formState.isDirty);
+    // console.log('form.formState.isValid (after attempt):', form.formState.isValid);
+    // console.log('form.formState.errors (JSON after attempt):', JSON.stringify(form.formState.errors, null, 2));
   };
 
 
@@ -355,8 +351,9 @@ export default function CampaignDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Form {...form}>
-            {/* Form tag for campaign details - handleSubmit will be triggered by its submit button */}
-            <form onSubmit={form.handleSubmit(onSubmitCampaignDetails)}>
+            {/* Form tag for campaign details - onSubmit will be triggered by its submit button if type="submit" */}
+            {/* However, we are using type="button" and onClick to handle submission via handleCampaignDetailsSubmitAttempt */}
+            <form onSubmit={(e) => e.preventDefault()}> {/* Prevent default HTML form submission */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center"><Edit3 className="mr-2 h-5 w-5" /> Postavke kampanje</CardTitle>
@@ -386,10 +383,10 @@ export default function CampaignDetailPage() {
                 </CardContent>
                 <CardFooter>
                   <Button 
-                    type="button" // Changed to "button" to use manual trigger
+                    type="button" 
                     size="sm" 
                     disabled={isSubmittingCampaign || !form.formState.isDirty}
-                    onClick={handleCampaignDetailsSubmitAttempt} // Using the new debug handler
+                    onClick={handleCampaignDetailsSubmitAttempt} 
                   >
                     <Save className="mr-2 h-4 w-4"/> {isSubmittingCampaign ? "Spremanje..." : "Spremi detalje"}
                   </Button>
@@ -456,8 +453,7 @@ export default function CampaignDetailPage() {
                 </Button>
               </CardFooter>
             </Card>
-          {/* Closing Form tag was here, but TV assignment is not part of the main form submission for campaign details */}
-          </Form> {/* This FormProvider should wrap all related form elements */}
+          </Form> 
         </div>
         
         <div className="lg:col-span-2 space-y-6">
