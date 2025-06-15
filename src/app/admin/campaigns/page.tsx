@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -7,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PlusCircle, Search, Edit, Trash2, CalendarDays, Tv, RefreshCw } from 'lucide-react';
-import type { Campaign, TV as UITV } from '@/lib/types'; // Preimenujemo TV iz types da se ne sukobljava s ikonom
+import type { Campaign, TV as UITV } from '@/lib/types';
 import { getCampaigns as fetchCampaigns, deleteCampaign as removeCampaign, getTVs as fetchAllTVs } from '@/lib/data';
 import { format, parseISO } from 'date-fns';
-import { hr } from 'date-fns/locale';
+import { hr } from 'date-fns/locale'; // Import hrvatske lokalizacije
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,7 +58,7 @@ export default function CampaignsPage() {
     try {
       const success = await removeCampaign(campaignId);
       if (success) {
-        await loadData(); // Refresh list
+        await loadData(); 
         toast({
           title: "Kampanja obrisana",
           description: `Kampanja s ID-om ${campaignId} uspješno je obrisana.`,
@@ -169,7 +170,7 @@ export default function CampaignsPage() {
                   </div>
                   <CardDescription className="flex items-center text-xs text-muted-foreground">
                     <CalendarDays className="h-3 w-3 mr-1" />
-                    {format(parseISO(campaign.startTime), 'PPp', { locale: hr })} - {format(parseISO(campaign.endTime), 'PPp', { locale: hr })}
+                    {format(parseISO(campaign.startTime), 'dd.MM.yyyy HH:mm', { locale: hr })} - {format(parseISO(campaign.endTime), 'dd.MM.yyyy HH:mm', { locale: hr })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow space-y-2">

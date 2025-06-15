@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -5,8 +6,8 @@ import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import type { Campaign, AdMedia, TV } from '@/lib/types';
 import { getCampaigns, getTVById } from '@/lib/data';
-import { WifiOff, Tv2, RefreshCw } from 'lucide-react'; // Dodana ikona RefreshCw
-import { Button } from '@/components/ui/button'; // Dodan import za Button
+import { WifiOff, Tv2, RefreshCw } from 'lucide-react'; 
+import { Button } from '@/components/ui/button'; 
 
 interface CurrentAd extends AdMedia {
   campaignName: string;
@@ -25,7 +26,10 @@ export default function TVDisplayPage() {
 
   const loadTVInfoAndAds = useCallback(async (showLoadingIndicator = true) => {
     if (showLoadingIndicator) setIsLoading(true);
-    setError(null); // Resetiraj grešku prije novog pokušaja
+    // Ne resetiramo grešku ovdje ako je showLoadingIndicator false,
+    // jer bi to moglo sakriti grešku koja se još uvijek prikazuje dok se pozadinski podaci osvježavaju.
+    // Resetirat ćemo je samo ako je showLoadingIndicator true (npr. kod ručnog refresha).
+    if (showLoadingIndicator) setError(null); 
 
     try {
       const tv = await getTVById(tvId);
@@ -34,7 +38,7 @@ export default function TVDisplayPage() {
         setTvInfo(null);
         setActiveAdsQueue([]);
         setCurrentAd(null);
-        setIsLoading(false);
+        if (showLoadingIndicator) setIsLoading(false);
         return;
       }
       setTvInfo(tv);
@@ -64,31 +68,29 @@ export default function TVDisplayPage() {
         }
       });
       
-      // Sortiraj oglase, npr. po nazivu ili ID-u za konzistentan redoslijed
       relevantAds.sort((a, b) => (a.name > b.name ? 1 : -1));
       
+      // Ažuriramo redoslijed oglasa. useEffect koji ovisi o activeAdsQueue će se pobrinuti za ostalo.
       setActiveAdsQueue(relevantAds);
-      setCurrentIndex(0); 
-      if (relevantAds.length > 0) {
-          setCurrentAd(relevantAds[0]);
-      } else {
-          setCurrentAd(null);
-      }
+      
+      // Ako je ovo bio pozadinski refresh i nema više oglasa,
+      // a trenutno se neki prikazuje, drugi useEffect će to srediti.
+      // Ako je bio početni load i nema oglasa, setCurrentAd(null) će se implicitno dogoditi.
+      
     } catch (e: any) {
         console.error("Greška pri dohvaćanju podataka za TV prikaz:", e);
         setError(`Greška pri dohvaćanju podataka: ${e.message || "Nepoznata greška"}`);
-        setTvInfo(null); // Postavi tvInfo na null u slučaju greške
+        setTvInfo(null); 
         setActiveAdsQueue([]);
         setCurrentAd(null);
     } finally {
         if (showLoadingIndicator) setIsLoading(false);
     }
-  }, [tvId]);
+  }, [tvId]); // Uklonjeni currentAd i currentIndex kao ovisnosti da se izbjegnu petlje kod pozadinskog osvježavanja
 
   useEffect(() => {
-    loadTVInfoAndAds();
-    // Osvježavanje podataka svakih 60 sekundi
-    const interval = setInterval(() => loadTVInfoAndAds(false), 60000); 
+    loadTVInfoAndAds(true); // Početno učitavanje s indikatorom
+    const interval = setInterval(() => loadTVInfoAndAds(false), 60000); // Osvježavanje svakih 60s bez indikatora
     return () => clearInterval(interval);
   }, [loadTVInfoAndAds]);
 
@@ -99,11 +101,10 @@ export default function TVDisplayPage() {
       return;
     }
     
-    // Osiguraj da je currentIndex unutar granica
     const validIndex = currentIndex % activeAdsQueue.length;
     const adToDisplay = activeAdsQueue[validIndex];
     
-    if (!adToDisplay) { // Dodatna provjera ako je redoslijed prazan ili indeks nevažeći
+    if (!adToDisplay) { 
         setCurrentAd(null);
         return;
     }
@@ -111,11 +112,11 @@ export default function TVDisplayPage() {
     setCurrentAd(adToDisplay);
 
     const duration = adToDisplay.type === 'video' 
-      ? 30000 // TODO: Dohvatiti stvarno trajanje videa ako je moguće
+      ? 30000 // TODO: Dohvatiti stvarno trajanje videa ako je moguće ili ga spremiti u bazu
       : (adToDisplay.durationSeconds || 10) * 1000;
 
     const timer = setTimeout(() => {
-      setCurrentIndex(prevIndex => (prevIndex + 1) % activeAdsQueue.length);
+      setCurrentIndex(prevIndex => (prevIndex + 1)); // Ne radimo modulo ovdje, validIndex gore će se pobrinuti
     }, duration);
 
     return () => clearTimeout(timer);
@@ -145,7 +146,7 @@ export default function TVDisplayPage() {
     );
   }
   
-  if (!tvInfo) { // Ovo stanje se može dogoditi ako TV nije pronađen, ali nije greška dohvaćanja
+  if (!tvInfo) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-900 text-white p-8">
         <Tv2 size={96} className="text-neutral-500 mb-6" />
@@ -171,39 +172,27 @@ export default function TVDisplayPage() {
               objectFit="contain" 
               priority
               data-ai-hint={currentAd.dataAIHint || "advertisement"}
-              unoptimized={currentAd.type === 'gif'} // Za GIF-ove da se ne optimiziraju (ako next/image to radi)
+              unoptimized={currentAd.type === 'gif'} 
               onError={(e) => {
                 console.error("Greška pri učitavanju slike/gifa:", currentAd.url, e);
-                // Opcionalno: prikaži placeholder ili poruku o grešci za ovaj oglas
               }}
             />
           ) : currentAd.type === 'video' ? (
             <video
-              key={currentAd.id} // Key da se video ponovno učita ako se URL promijeni za isti ID (malo vjerojatno ali sigurno)
+              key={currentAd.id} 
               src={currentAd.url}
               className="w-full h-full object-contain"
               autoPlay
               muted 
-              loop // Većina kratkih video oglasa se vrti u petlji
-              playsInline // Važno za iOS
+              loop 
+              playsInline 
               onError={(e) => {
                 console.error("Video greška:", currentAd.url, e);
-                 // Opcionalno: prikaži placeholder ili poruku o grešci
               }}
             />
           ) : (
             <div className="text-white text-2xl">Nepodržana vrsta oglasa: {currentAd.type}</div>
           )}
-          {/* 
-          Sakriveni debug info, može se omogućiti po potrebi
-          <div className="absolute bottom-0 left-0 bg-black bg-opacity-70 text-white p-2 text-xs z-10">
-            <p>TV: {tvInfo.name} (ID: {tvInfo.id})</p>
-            <p>Kampanja: {currentAd.campaignName}</p>
-            <p>Oglas: {currentAd.name} ({currentAd.type}, ID: {currentAd.id})</p>
-            <p>URL: {currentAd.url}</p>
-            <p>Redoslijed: {currentIndex + 1}/{activeAdsQueue.length}</p>
-          </div>
-          */}
         </>
       ) : (
         <div className="flex flex-col items-center justify-center text-white p-8 text-center">

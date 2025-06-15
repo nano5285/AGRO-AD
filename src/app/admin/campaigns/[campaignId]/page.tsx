@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea'; // Iako se ne koristi direktno, može zatrebati
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { campaignEditPageSchema, adMediaSchema, type AdMediaFormData, type CampaignEditPageFormData } from '@/lib/schemas';
 import type { Campaign, AdMedia, TV } from '@/lib/types';
@@ -26,7 +25,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, PlusCircle, Trash2, Edit3, Tv as TvIconLucide, Image as ImageIconLucide, FileVideo, Clapperboard, Save, Info, UploadCloud, RefreshCw } from 'lucide-react';
 import { format, parseISO, isValid as isDateValid } from 'date-fns';
-import { hr } from 'date-fns/locale';
+import { hr } from 'date-fns/locale'; // Import hrvatske lokalizacije
 import Image from 'next/image';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
@@ -92,12 +91,12 @@ export default function CampaignDetailPage() {
         
           let duration = ad.durationSeconds;
           if ((ad.type === 'image' || ad.type === 'gif') && (!duration || duration <= 0)) {
-            duration = 10; // Default duration if invalid or missing for image/gif
+            duration = 10; 
           }
         
           return {
             ...ad, 
-            file: ad.url, // Za postojeće oglase, 'file' je URL za prikaz
+            file: ad.url, 
             startTime: adStartTime,
             endTime: adEndTime,
             durationSeconds: duration,
@@ -182,14 +181,11 @@ export default function CampaignDetailPage() {
 
   const onAddAd = async (adFormData: AdMediaFormData) => {
     if (!campaign) return;
-    
-    // `adFormData.url` će sada biti Azure Blob URL (za slike/video) ili placeholder (za video ako upload nije uspio).
-    // `adFormData.fileName` je originalno ime datoteke.
-    
+        
     const newAdData: Omit<AdMedia, 'id'> = {
       name: adFormData.name,
       type: adFormData.type,
-      url: adFormData.url || (adFormData.type === 'video' ? 'https://placehold.co/300x200.png?text=Video+Error' : 'https://placehold.co/300x200.png?text=Image+Error'), // Fallback ako URL nije postavljen
+      url: adFormData.url || (adFormData.type === 'video' ? 'https://placehold.co/600x400.png?text=Video+Error' : 'https://placehold.co/300x200.png?text=Image+Error'),
       fileName: adFormData.fileName || 'nepoznata_datoteka',
       durationSeconds: adFormData.durationSeconds,
       startTime: adFormData.startTime && adFormData.startTime !== '' ? new Date(adFormData.startTime).toISOString() : undefined,
@@ -338,7 +334,6 @@ export default function CampaignDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <Form {...form}>
-            {/* Form za postavke kampanje */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><Edit3 className="mr-2 h-5 w-5" /> Postavke kampanje</CardTitle>
@@ -368,7 +363,7 @@ export default function CampaignDetailPage() {
               </CardContent>
               <CardFooter>
                 <Button 
-                  type="button" // Promijenjeno iz "submit"
+                  type="button"
                   size="sm" 
                   disabled={isSubmittingCampaign || !form.formState.isDirty}
                   onClick={handleCampaignDetailsSubmitAttempt} 
@@ -378,7 +373,6 @@ export default function CampaignDetailPage() {
               </CardFooter>
             </Card>
 
-            {/* Form (sada samo logika) za dodjelu TV-a */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><TvIconLucide className="mr-2 h-5 w-5" /> Dodijeli TV prijemnicima</CardTitle>
@@ -499,7 +493,7 @@ export default function CampaignDetailPage() {
                         }
                         {(form.watch(`ads.${index}.startTime`) && form.watch(`ads.${index}.endTime`) && form.watch(`ads.${index}.startTime`) !== '' && form.watch(`ads.${index}.endTime`) !== '' && isDateValid(parseISO(form.watch(`ads.${index}.startTime`) as string)) && isDateValid(parseISO(form.watch(`ads.${index}.endTime`) as string))) && (
                             <p className="text-xs text-muted-foreground">
-                                Oglas aktivan: {format(parseISO(form.watch(`ads.${index}.startTime`) as string), "PPp", { locale: hr })} - {format(parseISO(form.watch(`ads.${index}.endTime`) as string), "PPp", { locale: hr })}
+                                Oglas aktivan: {format(parseISO(form.watch(`ads.${index}.startTime`) as string), "dd.MM.yyyy HH:mm", { locale: hr })} - {format(parseISO(form.watch(`ads.${index}.endTime`) as string), "dd.MM.yyyy HH:mm", { locale: hr })}
                             </p>
                         )}
                       </CardContent>
@@ -578,11 +572,11 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         setIsSubmittingAd(false);
         return;
       }
-    } else if (!uploadedFileUrl) { // Fallback ako nema ni datoteke ni postojećeg URL-a (npr. ako se ne odabere datoteka za video)
+    } else if (!uploadedFileUrl) { 
       if (data.type === 'video') {
-        uploadedFileUrl = 'https://placehold.co/600x400.png?text=Video+Not+Uploaded'; // Korisnik mora ručno unijeti URL za video ako ga ne uploada
+        uploadedFileUrl = 'https://placehold.co/600x400.png?text=Video+Not+Uploaded'; 
         finalDataAIHint = "sample video placeholder";
-      } else { // Za slike/gif ako nije odabrana datoteka, a nema ni URL-a
+      } else { 
         uploadedFileUrl = `https://placehold.co/300x200.png`;
         finalDataAIHint = "placeholder image";
       }
@@ -605,7 +599,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         dataAIHint: finalDataAIHint,
         startTime: finalStartTime, 
         endTime: finalEndTime,
-        file: undefined // File objekt više nije potreban nakon uploada, šaljemo samo URL
+        file: undefined 
     };
 
     try {
@@ -696,7 +690,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                       const file = e.target.files?.[0];
                       onChange(file); 
                       setSelectedFileName(file ? file.name : null);
-                      if (file) { // Ako je datoteka odabrana, resetiraj URL polje
+                      if (file) { 
                         adForm.setValue("url", undefined);
                       }
                     }}
@@ -725,7 +719,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
          {adType === 'video' && (
             <FormField
             control={adForm.control}
-            name="url" // Koristimo postojeće 'url' polje za unos URL-a videa ako se ne uploada
+            name="url" 
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Ili unesite URL videa</FormLabel>
@@ -735,7 +729,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
                     {...field} 
                     onChange={(e) => {
                         field.onChange(e.target.value);
-                        if (e.target.value) { // Ako je URL unesen, resetiraj file input
+                        if (e.target.value) { 
                             adForm.setValue("file", undefined);
                             setSelectedFileName(null);
                             setPreviewUrl(null);
@@ -760,7 +754,7 @@ function AdCreator({ campaignId, onAdAdded, campaignStartTime, campaignEndTime }
         <p className="text-xs text-muted-foreground flex items-center"><Info size={14} className="mr-1 text-primary" /> 
             Vremena početka/završetka oglasa zadano su trajanje kampanje ako nisu navedena. 
             Trajanje kampanje: 
-            {(campaignStartTime && isDateValid(new Date(campaignStartTime))) ? format(new Date(campaignStartTime), "P p", { locale: hr }) : 'N/A'} do {(campaignEndTime && isDateValid(new Date(campaignEndTime))) ? format(new Date(campaignEndTime), "P p", { locale: hr }) : 'N/A'}.
+            {(campaignStartTime && isDateValid(new Date(campaignStartTime))) ? format(new Date(campaignStartTime), "dd.MM.yyyy HH:mm", { locale: hr }) : 'N/A'} do {(campaignEndTime && isDateValid(new Date(campaignEndTime))) ? format(new Date(campaignEndTime), "dd.MM.yyyy HH:mm", { locale: hr }) : 'N/A'}.
         </p>
         <div className="grid grid-cols-2 gap-4">
             <FormField control={adForm.control} name="startTime" render={({ field }) => (
